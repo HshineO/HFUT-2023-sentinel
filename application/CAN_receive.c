@@ -46,10 +46,15 @@ motor data,  0:chassis motor1 3508;1:chassis motor3 3508;2:chassis motor3 3508;3
 4:yaw云台电机 6020电机; 5:pitch云台电机 6020电机; 6:拨弹电机 2006电机*/
 static motor_measure_t motor_chassis[7];
 
+static motor_measure_t shoot_motor[3];  
+
 static CAN_TxHeaderTypeDef  gimbal_tx_message;
 static uint8_t              gimbal_can_send_data[8];
 static CAN_TxHeaderTypeDef  chassis_tx_message;
 static uint8_t              chassis_can_send_data[8];
+
+static CAN_TxHeaderTypeDef extra_tx_message;
+static uint8_t extra_can_send_data[8];
 
 /**
   * @brief          hal CAN fifo call back, receive motor data
@@ -108,6 +113,10 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
               detect_hook(CHASSIS_MOTOR1_TOE + i);
               break;
           }
+          
+          case CAN_TRIGER_L_ID: get_motor_measure(&shoot_motor[1],rx_data);break;
+          case CAN_TRIGER_R_ID: get_motor_measure(&shoot_motor[2],rx_data);break;
+          case CAN_DIAL_ID: get_motor_measure(&shoot_motor[0],rx_data);break;
 
           default:
           {
@@ -239,6 +248,25 @@ void CAN_cmd_chassis(int16_t motor1, int16_t motor2, int16_t motor3, int16_t mot
     HAL_CAN_AddTxMessage(&CHASSIS_CAN, &chassis_tx_message, chassis_can_send_data, &send_mail_box);
 }
 
+void CAN_CMD_Extra3508(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4)
+{
+  uint32_t send_mail_box;
+  extra_tx_message.StdId = CAN_CHASSIS_ALL_ID;
+  extra_tx_message.IDE = CAN_ID_STD;
+  extra_tx_message.RTR = CAN_RTR_DATA;
+  extra_tx_message.DLC = 0x08;
+  extra_can_send_data[0] = motor1 >> 8;
+  extra_can_send_data[1] = motor1;
+  extra_can_send_data[2] = motor2 >> 8;
+  extra_can_send_data[3] = motor2;
+  extra_can_send_data[4] = motor3 >> 8;
+  extra_can_send_data[5] = motor3;
+  extra_can_send_data[6] = motor4 >> 8;
+  extra_can_send_data[7] = motor4;
+
+  HAL_CAN_AddTxMessage(&hcan2, &extra_tx_message, extra_can_send_data, &send_mail_box);
+}
+
 /**
   * @brief          return the yaw 6020 motor data point
   * @param[in]      none
@@ -299,4 +327,9 @@ const motor_measure_t *get_trigger_motor_measure_point(void)
 const motor_measure_t *get_chassis_motor_measure_point(uint8_t i)
 {
     return &motor_chassis[(i & 0x03)];
+}
+
+const motor_measure_t *get_shoot_motor_point(uint8_t i)//上云台 0 1 2 拨弹 左摩擦轮 右摩擦轮 下云台 3 4 5 拨弹 左摩擦轮 右摩擦轮
+{
+  return &shoot_motor[i];
 }

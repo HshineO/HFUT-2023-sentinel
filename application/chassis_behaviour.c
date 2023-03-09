@@ -245,7 +245,7 @@ void chassis_behaviour_mode_set(chassis_move_t *chassis_move_mode)
     {
         //can change to CHASSIS_ZERO_FORCE,CHASSIS_NO_MOVE,CHASSIS_INFANTRY_FOLLOW_GIMBAL_YAW,
         //CHASSIS_ENGINEER_FOLLOW_CHASSIS_YAW,CHASSIS_NO_FOLLOW_YAW,CHASSIS_OPEN
-        chassis_behaviour_mode = CHASSIS_NO_FOLLOW_YAW;
+        chassis_behaviour_mode = CHASSIS_NO_FOLLOW_YAW; //CHASSIS_INFANTRY_FOLLOW_GIMBAL_YAW;
     }
     else if (switch_is_down(chassis_move_mode->chassis_RC->rc.s[CHASSIS_MODE_CHANNEL]))
     {
@@ -253,7 +253,7 @@ void chassis_behaviour_mode_set(chassis_move_t *chassis_move_mode)
     }
     else if (switch_is_up(chassis_move_mode->chassis_RC->rc.s[CHASSIS_MODE_CHANNEL]))
     {
-        chassis_behaviour_mode = CHASSIS_INFANTRY_FOLLOW_GIMBAL_YAW;
+        chassis_behaviour_mode = CHASSIS_INFANTRY_FOLLOW_GIMBAL_YAW;//小陀螺模式
     }
 
     //when gimbal in some mode, such as init mode, chassis must's move
@@ -435,7 +435,7 @@ static void chassis_infantry_follow_gimbal_yaw_control(fp32 *vx_set, fp32 *vy_se
     {
         return;
     }
-
+    //*angle_set=0;
     //channel value and keyboard value change to speed set-point, in general
     //遥控器的通道值以及键盘按键 得出 一般情况下的速度设定值
     chassis_rc_to_control_vector(vx_set, vy_set, chassis_move_rc_to_vector);
@@ -450,34 +450,38 @@ static void chassis_infantry_follow_gimbal_yaw_control(fp32 *vx_set, fp32 *vy_se
     static fp32 max_angle = SWING_NO_MOVE_ANGLE;
     //swing_time  plus the add_time in one control cycle
     //swing_time 在一个控制周期内，加上 add_time
-    static fp32 const add_time = PI * 0.5f * configTICK_RATE_HZ / CHASSIS_CONTROL_TIME_MS;
+    static fp32 const add_time = 0.02f;//PI * 0.5f * configTICK_RATE_HZ / CHASSIS_CONTROL_TIME_MS;
     
     static uint8_t swing_flag = 0;
 
     //judge if swing
     //判断是否要摇摆
-    if (chassis_move_rc_to_vector->chassis_RC->key.v & SWING_KEY)
-    {
-        if (swing_flag == 0)
-        {
-            swing_flag = 1;
-            swing_time = 0.0f;
-        }
-    }
-    else
-    {
-        swing_flag = 0;
-    }
+    //if (chassis_move_rc_to_vector->chassis_RC->key.v & SWING_KEY)
+    //if(switch_is_up(chassis_move_rc_to_vector->chassis_RC->rc.s[CHASSIS_MODE_CHANNEL]))
+//    {
+//        if (swing_flag == 0)
+//        {
+//            swing_flag = 1;
+//            swing_time = 0.0f;
+//        }
+//    }
+//    else
+//    {
+//        swing_flag = 0;
+//        swing_angle = 0;
+//        //*angle_set = 0;
+//    }
 
     //judge if keyboard is controlling the chassis, if yes, reduce the max_angle
     //判断键盘输入是不是在控制底盘运动，底盘在运动减小摇摆角度
-    if (chassis_move_rc_to_vector->chassis_RC->key.v & CHASSIS_FRONT_KEY || chassis_move_rc_to_vector->chassis_RC->key.v & CHASSIS_BACK_KEY ||
-        chassis_move_rc_to_vector->chassis_RC->key.v & CHASSIS_LEFT_KEY || chassis_move_rc_to_vector->chassis_RC->key.v & CHASSIS_RIGHT_KEY)
+     //if (chassis_move_rc_to_vector->chassis_RC->key.v & CHASSIS_FRONT_KEY || chassis_move_rc_to_vector->chassis_RC->key.v & CHASSIS_BACK_KEY ||
+     //    chassis_move_rc_to_vector->chassis_RC->key.v & CHASSIS_LEFT_KEY || chassis_move_rc_to_vector->chassis_RC->key.v & CHASSIS_RIGHT_KEY)
+    //if(switch_is_up(chassis_move_rc_to_vector->chassis_RC->rc.s[CHASSIS_MODE_CHANNEL]) )
     {
-        max_angle = SWING_MOVE_ANGLE;
+        max_angle = 0.7f;//SWING_MOVE_ANGLE;
     }
-    else
-    {
+     //else
+     {
         max_angle = SWING_NO_MOVE_ANGLE;
     }
     

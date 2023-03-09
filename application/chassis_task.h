@@ -102,10 +102,10 @@
 #define MAX_WHEEL_SPEED 4.0f
 //chassis forward or back max speed
 //底盘运动过程最大前进速度
-#define NORMAL_MAX_CHASSIS_SPEED_X 2.0f
+#define NORMAL_MAX_CHASSIS_SPEED_X 0.5f//2.0f
 //chassis left or right max speed
 //底盘运动过程最大平移速度
-#define NORMAL_MAX_CHASSIS_SPEED_Y 1.5f
+#define NORMAL_MAX_CHASSIS_SPEED_Y 0.5f//1.5f
 
 #define CHASSIS_WZ_SET_SCALE 0.1f
 
@@ -131,6 +131,12 @@
 #define CHASSIS_FOLLOW_GIMBAL_PID_KD 0.0f
 #define CHASSIS_FOLLOW_GIMBAL_PID_MAX_OUT 6.0f
 #define CHASSIS_FOLLOW_GIMBAL_PID_MAX_IOUT 0.2f
+
+typedef enum
+{
+    CHASSIS_RC = 0,//手动模式
+    CHASSIS_AUTO,  //自动模式
+} chassis_control_mode_e;
 
 typedef enum
 {
@@ -182,6 +188,8 @@ typedef struct
   fp32 chassis_yaw;   //the yaw angle calculated by gyro sensor and gimbal motor.陀螺仪和云台电机叠加的yaw角度
   fp32 chassis_pitch; //the pitch angle calculated by gyro sensor and gimbal motor.陀螺仪和云台电机叠加的pitch角度
   fp32 chassis_roll;  //the roll angle calculated by gyro sensor and gimbal motor.陀螺仪和云台电机叠加的roll角度
+
+  chassis_control_mode_e chassis_control_mode; //手动自动切换
 
 } chassis_move_t;
 

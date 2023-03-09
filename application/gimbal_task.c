@@ -375,8 +375,8 @@ void gimbal_task(void const *pvParameters)
         CAN_cmd_gimbal_yaw(yaw_can_set_current);
       }
     }
-    ANODT_SendF1(gimbal_control.gimbal_pitch_motor.absolute_angle * 100, gimbal_control.gimbal_pitch_motor.absolute_angle_set * 100,
-                 gimbal_control.gimbal_pitch_motor.motor_gyro * 100, gimbal_control.gimbal_pitch_motor.motor_gyro_set * 100);
+    //ANODT_SendF1(gimbal_control.gimbal_pitch_motor.absolute_angle * 100, gimbal_control.gimbal_pitch_motor.absolute_angle_set * 100,
+    //             gimbal_control.gimbal_pitch_motor.motor_gyro * 100, gimbal_control.gimbal_pitch_motor.motor_gyro_set * 100);
 
 #if GIMBAL_TEST_MODE
     J_scope_gimbal_test();

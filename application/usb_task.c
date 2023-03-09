@@ -47,7 +47,7 @@ SendPacket_t sendPacket;
 uint8_t send_buffer[12]={0};
 
 RecievePacket_t recievePacket;
-extern uint8_t usb_rx_buf[12];
+extern uint8_t usb_rx_buf[128];//[12];
 
 void send_data();
 void receive_data();
@@ -61,7 +61,7 @@ void usb_task(void const *argument)
     while (1)
     {
         send_data();
-			  receive_data();
+		receive_data();
         osDelay(5);
     }
 }
@@ -92,9 +92,9 @@ void receive_data()
 {
     if(usb_rx_buf[0]==0xA5)
     {
-        if(verify_CRC16_check_sum(usb_rx_buf,(sizeof(sendPacket)+2)))
+        if(verify_CRC16_check_sum(usb_rx_buf,(sizeof(recievePacket)+2)))
         {
-            memcpy(&recievePacket,usb_rx_buf,sizeof(sendPacket));
+            memcpy(&recievePacket,usb_rx_buf,sizeof(recievePacket));
         }
     }
 }

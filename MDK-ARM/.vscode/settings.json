@@ -1,7 +1,12 @@
 {
     "files.associations": {
         "usb_task.h": "c",
-        "struct_typedef.h": "c"
+        "struct_typedef.h": "c",
+        "remote_control.h": "c",
+        "gimbal_task.h": "c",
+        "oled_task.h": "c",
+        "led_flow_task.h": "c",
+        "can_receive.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

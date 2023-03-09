@@ -43,6 +43,7 @@ typedef __packed struct
   uint8_t reserved:3;
   fp32 cmd_pitch;
   fp32 cmd_yaw;
+  fp32 cmd_vx,cmd_vy,cmd_wz;
   //uint16_t crc_check; 
   /* data */
 }RecievePacket_t;

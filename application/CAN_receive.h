@@ -40,6 +40,11 @@ typedef enum
     CAN_TRIGGER_MOTOR_ID = 0x207,
     CAN_GIMBAL_ALL_ID = 0x1FF,
 
+    CAN_TRIGER_L_ID=0x203,//CAN_3508_M2_ID = 0x202,
+    CAN_TRIGER_R_ID = 0x204,
+     CAN_DIAL_ID = 0x202,
+
+
 } can_msg_id_e;
 
 //rm motor data
@@ -102,6 +107,8 @@ extern void CAN_cmd_chassis_reset_ID(void);
   */
 extern void CAN_cmd_chassis(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4);
 
+void CAN_CMD_Extra3508(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4);
+
 /**
   * @brief          return the yaw 6020 motor data point
   * @param[in]      none
@@ -150,5 +157,7 @@ extern const motor_measure_t *get_trigger_motor_measure_point(void);
   */
 extern const motor_measure_t *get_chassis_motor_measure_point(uint8_t i);
 
+
+const motor_measure_t *get_shoot_motor_point(uint8_t i);
 
 #endif

@@ -30,6 +30,8 @@
 #include "chassis_power_control.h"
 
 #include "ANO_DT.h"
+#include "usb_task.h"
+extern RecievePacket_t recievePacket;
 
 #define rc_deadband_limit(input, output, dealine)        \
     {                                                    \
@@ -284,10 +286,25 @@ static void chassis_init(chassis_move_t *chassis_move_init)
   */
 static void chassis_set_mode(chassis_move_t *chassis_move_mode)
 {
+  static uint16_t timecnt;
     if (chassis_move_mode == NULL)
     {
         return;
     }
+
+      // 手动、自动模式切换
+  if (chassis_move_mode->chassis_RC->rc.ch[4] >= 630 || chassis_move_mode->chassis_RC->rc.ch[4] <= -630)
+  {
+    timecnt++;
+    if (timecnt > 1000)
+    {
+      if (chassis_move_mode->chassis_RC->rc.ch[4] >= 630)
+        chassis_move_mode->chassis_control_mode = CHASSIS_AUTO;
+      if (chassis_move_mode->chassis_RC->rc.ch[4] <= -630)
+        chassis_move_mode->chassis_control_mode = CHASSIS_RC;
+      timecnt = 0;
+    }
+  }
     //in file "chassis_behaviour.c"
     chassis_behaviour_mode_set(chassis_move_mode);
 }
@@ -371,6 +388,7 @@ static void chassis_feedback_update(chassis_move_t *chassis_move_update)
     //calculate chassis euler angle, if chassis add a new gyro sensor,please change this code
     //计算底盘姿态角度, 如果底盘上有陀螺仪请更改这部分代码
     chassis_move_update->chassis_yaw = rad_format(*(chassis_move_update->chassis_INS_angle + INS_YAW_ADDRESS_OFFSET) - chassis_move_update->chassis_yaw_motor->relative_angle);
+    //chassis_move_update->chassis_yaw = *(chassis_move_update->chassis_INS_angle + INS_YAW_ADDRESS_OFFSET) ;
     chassis_move_update->chassis_pitch = rad_format(*(chassis_move_update->chassis_INS_angle + INS_PITCH_ADDRESS_OFFSET) - chassis_move_update->chassis_pitch_motor->relative_angle);
     chassis_move_update->chassis_roll = *(chassis_move_update->chassis_INS_angle + INS_ROLL_ADDRESS_OFFSET);
 }
@@ -467,12 +485,44 @@ static void chassis_set_contorl(chassis_move_t *chassis_move_control)
 
     fp32 vx_set = 0.0f, vy_set = 0.0f, angle_set = 0.0f;
     //get three control set-point, 获取三个控制设置值
-    chassis_behaviour_control_set(&vx_set, &vy_set, &angle_set, chassis_move_control);
+    if (chassis_move_control->chassis_control_mode == CHASSIS_RC)
+    {
+      chassis_behaviour_control_set(&vx_set, &vy_set, &angle_set, chassis_move_control);
+    }
+    else if (chassis_move_control->chassis_control_mode == CHASSIS_AUTO)
+    {
+      vx_set = recievePacket.cmd_vx;
+      vy_set = recievePacket.cmd_vy;
+      angle_set = recievePacket.cmd_wz;//自动模式下暂时先用 CHASSIS_VECTOR_NO_FOLLOW_YAW 模式 angle_set 就是速度
+    }
+  
 
     //follow gimbal mode
     //跟随云台模式
     if (chassis_move_control->chassis_mode == CHASSIS_VECTOR_FOLLOW_GIMBAL_YAW)
-    {
+    {   
+    //   static fp32 max_angle = SWING_NO_MOVE_ANGLE;
+    // //swing_time  plus the add_time in one control cycle
+    // //swing_time 在一个控制周期内，加上 add_time
+    // static fp32 const add_time = 0.02f;//PI * 0.5f * configTICK_RATE_HZ / CHASSIS_CONTROL_TIME_MS;
+    // static fp32 last_angle_set;
+    //     static fp32 swing_angle;
+    //     static fp32 swing_time = 0.0f;
+    //     swing_angle += max_angle * 0.01f;//arm_sin_f32(swing_time);//0.01f;//
+    //     swing_time += add_time;
+
+    //     if (swing_time > 2 * PI)
+    //     {
+    //         swing_time -= 2 * PI;
+    //     }
+
+    //     last_angle_set=angle_set;
+    //     angle_set = swing_angle;
+		// 		// if (angle_set > 2 * PI)
+    //     // {
+    //     //     angle_set -= 2 * PI;
+    //     // }
+
         fp32 sin_yaw = 0.0f, cos_yaw = 0.0f;
         //rotate chassis direction, make sure vertial direction follow gimbal 
         //旋转控制底盘速度方向，保证前进方向是云台方向，有利于运动平稳
@@ -482,11 +532,15 @@ static void chassis_set_contorl(chassis_move_t *chassis_move_control)
         chassis_move_control->vy_set = -sin_yaw * vx_set + cos_yaw * vy_set;
         //set control relative angle  set-point
         //设置控制相对云台角度
-        chassis_move_control->chassis_relative_angle_set = rad_format(angle_set);
+        //chassis_move_control->chassis_relative_angle_set = rad_format(angle_set);
+				chassis_move_control->chassis_relative_angle_set = angle_set;
         //calculate ratation speed
         //计算旋转PID角速度
+        //if(last_angle_set-angle_set<=2*PI-0.05f)
         chassis_move_control->wz_set = -PID_calc(&chassis_move_control->chassis_angle_pid, chassis_move_control->chassis_yaw_motor->relative_angle, chassis_move_control->chassis_relative_angle_set);
+				//chassis_move_control->wz_set=-2.5f;
         //speed limit
+        ANODT_SendF1(chassis_move_control->chassis_yaw_motor->relative_angle*100,chassis_move_control->chassis_relative_angle_set*100,chassis_move_control->wz_set*100,0);
         //速度限幅
         chassis_move_control->vx_set = fp32_constrain(chassis_move_control->vx_set, chassis_move_control->vx_min_speed, chassis_move_control->vx_max_speed);
         chassis_move_control->vy_set = fp32_constrain(chassis_move_control->vy_set, chassis_move_control->vy_min_speed, chassis_move_control->vy_max_speed);
@@ -548,8 +602,8 @@ static void chassis_vector_to_mecanum_wheel_speed(const fp32 vx_set, const fp32 
     //旋转的时候， 由于云台靠前，所以是前面两轮 0 ，1 旋转的速度变慢， 后面两轮 2,3 旋转的速度变快
     wheel_speed[0] = -vx_set - vy_set + (CHASSIS_WZ_SET_SCALE - 1.0f) * MOTOR_DISTANCE_TO_CENTER * wz_set;
     wheel_speed[1] = vx_set - vy_set + (CHASSIS_WZ_SET_SCALE - 1.0f) * MOTOR_DISTANCE_TO_CENTER * wz_set;
-    wheel_speed[2] = vx_set + vy_set + (-CHASSIS_WZ_SET_SCALE - 1.0f) * MOTOR_DISTANCE_TO_CENTER * wz_set;
-    wheel_speed[3] = -vx_set + vy_set + (-CHASSIS_WZ_SET_SCALE - 1.0f) * MOTOR_DISTANCE_TO_CENTER * wz_set;
+    wheel_speed[2] = vx_set + vy_set + (CHASSIS_WZ_SET_SCALE - 1.0f) * MOTOR_DISTANCE_TO_CENTER * wz_set;
+    wheel_speed[3] = -vx_set + vy_set + (CHASSIS_WZ_SET_SCALE - 1.0f) * MOTOR_DISTANCE_TO_CENTER * wz_set;
 }
 
 
