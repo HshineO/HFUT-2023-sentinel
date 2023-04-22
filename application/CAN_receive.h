@@ -106,7 +106,8 @@ extern void CAN_cmd_chassis_reset_ID(void);
   * @retval         none
   */
 extern void CAN_cmd_chassis(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4);
-
+extern void CAN_cmd_gimbal_6020(int16_t pitch, int16_t yaw);
+extern void CAN_cmd_chassis_shoot(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4);
 void CAN_CMD_Extra3508(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4);
 
 /**
@@ -159,5 +160,7 @@ extern const motor_measure_t *get_chassis_motor_measure_point(uint8_t i);
 
 
 const motor_measure_t *get_shoot_motor_point(uint8_t i);
+
+void CAN_cmd_chassis_shoot(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4);
 
 #endif

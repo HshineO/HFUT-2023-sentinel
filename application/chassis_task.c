@@ -188,8 +188,11 @@ void chassis_task(void const *pvParameters)
                 CAN_cmd_chassis(chassis_move.motor_chassis[0].give_current, chassis_move.motor_chassis[1].give_current,
                                 chassis_move.motor_chassis[2].give_current, chassis_move.motor_chassis[3].give_current);
             }
-            //ANODT_SendF1(chassis_move.motor_chassis[1].speed*1000,chassis_move.motor_chassis[1].speed_set*1000,
-							//					chassis_move.motor_chassis[1].chassis_motor_measure->speed_rpm,0);
+#if chassis_debug
+			ANODT_SendF1(chassis_move.motor_chassis[1].speed*1000,chassis_move.motor_chassis[1].speed_set*1000,
+						 chassis_move.motor_chassis[1].chassis_motor_measure->speed_rpm,0,
+						 16);
+#endif
         }
         //os delay
         //œµÕ≥—” ±
