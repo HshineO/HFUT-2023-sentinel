@@ -25,7 +25,7 @@
 #include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */     
+/* USER CODE BEGIN Includes */
 
 #include "calibrate_task.h"
 #include "chassis_task.h"
@@ -73,6 +73,7 @@ osThreadId servo_task_handle;
 
 /* USER CODE END Variables */
 osThreadId testHandle;
+osThreadId shootHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -80,6 +81,7 @@ osThreadId testHandle;
 /* USER CODE END FunctionPrototypes */
 
 void test_task(void const * argument);
+extern void shoot_task(void const * argument);
 
 extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -147,6 +149,10 @@ void MX_FREERTOS_Init(void) {
   osThreadDef(test, test_task, osPriorityNormal, 0, 128);
   testHandle = osThreadCreate(osThread(test), NULL);
 
+  /* definition and creation of shoot */
+  osThreadDef(shoot, shoot_task, osPriorityNormal, 0, 512);
+  shootHandle = osThreadCreate(osThread(shoot), NULL);
+
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
     //osThreadDef(cali, calibrate_task, osPriorityNormal, 0, 512);
@@ -202,7 +208,6 @@ __weak void test_task(void const * argument)
 {
   /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
-
   /* USER CODE BEGIN test_task */
   /* Infinite loop */
   for(;;)
@@ -216,5 +221,3 @@ __weak void test_task(void const * argument)
 /* USER CODE BEGIN Application */
      
 /* USER CODE END Application */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
