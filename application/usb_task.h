@@ -34,15 +34,28 @@ typedef __packed struct
 
 typedef __packed struct 
 {
-  
-  uint8_t header;
-  uint8_t findEnemy:1;
-  uint8_t target_color:1;
-  uint8_t task_mode:2;
-  uint8_t suggest_fire:1;
-  uint8_t reserved:3;
-  fp32 cmd_pitch;
-  fp32 cmd_yaw;
+//  
+//   uint8_t header;
+//   uint8_t findEnemy:1;
+//   uint8_t target_color:1;
+//   uint8_t task_mode:2;
+//   uint8_t suggest_fire:1;
+//   uint8_t reserved:3;
+//   fp32 cmd_pitch;
+//   fp32 cmd_yaw;
+   
+  uint8_t header ;
+  uint8_t tracking : 1;
+  uint8_t target_color : 1;
+  uint8_t task_mode : 2;
+  uint8_t suggest_fire : 1;
+  uint8_t reserve : 3;
+  fp32 x;
+  fp32 y;
+  fp32 z;
+  fp32 vx;
+  fp32 vy;
+  fp32 vz;
   fp32 cmd_vx,cmd_vy,cmd_wz;
   //uint16_t crc_check; 
   /* data */

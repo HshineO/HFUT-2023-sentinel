@@ -99,11 +99,8 @@ void shoot_task(void const * argument)
 	  //}
 		
 //	  usb_printf("%6d,%6d.", user_motor.motor_extra_3508_l.extra_3508_measure->speed_rpm, user_motor.motor_extra_3508_r.extra_3508_measure->speed_rpm );
-#if shoot_Debug
-		ANODT_SendF1(user_motor.motor_extra_3508_high_l.extra_3508_measure->speed_rpm,user_motor.motor_extra_3508_low_l.extra_3508_measure->speed_rpm,
-				 user_motor.motor_extra_3508_high_r.extra_3508_measure->speed_rpm,user_motor.motor_extra_3508_low_r.extra_3508_measure->speed_rpm,
-				 16);
-#endif
+//    ANODT_SendF1(user_motor.motor_extra_3508_high_l.extra_3508_measure->speed_rpm,user_motor.motor_extra_3508_low_l.extra_3508_measure->speed_rpm,
+//				 user_motor.motor_extra_3508_high_r.extra_3508_measure->speed_rpm,user_motor.motor_extra_3508_low_r.extra_3508_measure->speed_rpm);
 	vTaskDelay(2);	
 	}
 

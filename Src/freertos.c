@@ -38,6 +38,8 @@
 #include "usb_task.h"
 #include "voltage_task.h"
 #include "servo_task.h"
+
+#include "shoot_task.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -74,6 +76,7 @@ osThreadId servo_task_handle;
 /* USER CODE END Variables */
 osThreadId testHandle;
 osThreadId shootHandle;
+osTimerId Buzz_TimerHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -82,6 +85,7 @@ osThreadId shootHandle;
 
 void test_task(void const * argument);
 extern void shoot_task(void const * argument);
+extern void Buzz_Callback(void const * argument);
 
 extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -136,6 +140,11 @@ void MX_FREERTOS_Init(void) {
   /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
 
+  /* Create the timer(s) */
+  /* definition and creation of Buzz_Timer */
+  osTimerDef(Buzz_Timer, Buzz_Callback);
+  Buzz_TimerHandle = osTimerCreate(osTimer(Buzz_Timer), osTimerOnce, NULL);
+
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
@@ -171,7 +180,7 @@ void MX_FREERTOS_Init(void) {
     imuTaskHandle = osThreadCreate(osThread(imuTask), NULL);
 
     osThreadDef(led, led_RGB_flow_task, osPriorityNormal, 0, 256);
-    led_RGB_flow_handle = osThreadCreate(osThread(led), NULL);
+   led_RGB_flow_handle = osThreadCreate(osThread(led), NULL);
 
 
     //osThreadDef(OLED, oled_task, osPriorityLow, 0, 256);

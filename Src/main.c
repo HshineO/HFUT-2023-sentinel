@@ -46,11 +46,13 @@
 #include "detect_task.h"
 #include "gimbal_task.h"
 #include "INS_task.h"
-#include "led_flow_task.h"
+//#include "led_flow_task.h"
 #include "oled_task.h"
 #include "referee_usart_task.h"
 #include "usb_task.h"
 #include "voltage_task.h"
+
+#include "shoot_task.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -87,7 +89,7 @@ void MX_FREERTOS_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void usb_init()
+	void usb_init()
 {
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
 	GPIO_InitStruct.Pin = GPIO_PIN_12;
@@ -126,7 +128,7 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+ 
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -159,10 +161,9 @@ int main(void)
     cali_param_init();
     remote_control_init();
     usart1_tx_dma_init();
-		//哨兵C板蜂鸣器坏了 关掉
-		//buzzer_off();
-		usb_init();
-		//usb虚拟串口重新枚举
+	buzzer_off();//哨兵C板蜂鸣器坏了 关掉
+	usb_init();
+	//usb虚拟串口重新枚举
   /* USER CODE END 2 */
 
   /* Call init function for freertos objects (in freertos.c) */

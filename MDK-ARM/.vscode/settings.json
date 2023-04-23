@@ -6,7 +6,11 @@
         "gimbal_task.h": "c",
         "oled_task.h": "c",
         "led_flow_task.h": "c",
-        "can_receive.h": "c"
+        "can_receive.h": "c",
+        "user_lib.h": "c",
+        "ins_task.h": "c",
+        "detect_task.h": "c",
+        "calibrate_task.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

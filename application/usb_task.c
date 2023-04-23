@@ -61,7 +61,7 @@ void usb_task(void const *argument)
     while (1)
     {
         send_data();
-		receive_data();
+	    receive_data();
         osDelay(5);
     }
 }
@@ -72,7 +72,7 @@ void send_data()
 
     sendPacket.robot_color = 1;
     sendPacket.task_mode = 1;
-    sendPacket.yaw = gimbal_control.gimbal_yaw_motor.absolute_angle;
+    sendPacket.yaw = - gimbal_control.gimbal_yaw_motor.absolute_angle;
     sendPacket.pitch = gimbal_control.gimbal_pitch_motor.absolute_angle;
     
 //    send_buffer[0]=sendPacket.header;

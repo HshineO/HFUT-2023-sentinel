@@ -34,15 +34,19 @@ typedef enum
     CAN_3508_M2_ID = 0x202,
     CAN_3508_M3_ID = 0x203,
     CAN_3508_M4_ID = 0x204,
+	
+    CAN_PIT_MOTOR_ID = 0x205,
+    CAN_YAW_MOTOR_ID = 0x206,
 
-    CAN_YAW_MOTOR_ID = 0x205,
-    CAN_PIT_MOTOR_ID = 0x206,
     CAN_TRIGGER_MOTOR_ID = 0x207,
     CAN_GIMBAL_ALL_ID = 0x1FF,
 
-    CAN_TRIGER_L_ID=0x203,//CAN_3508_M2_ID = 0x202,
-    CAN_TRIGER_R_ID = 0x204,
-     CAN_DIAL_ID = 0x202,
+    CAN_TRIGER_high_L_ID=0x201,//四个摩擦轮两个拨弹
+    CAN_TRIGER_low_L_ID = 0x202,
+	  CAN_TRIGER_high_R_ID=0x204,
+    CAN_TRIGER_low_R_ID = 0x205,
+    CAN_DIAL_L_ID = 0x203,
+    CAN_DIAL_R_ID = 0x206,
 
 
 } can_msg_id_e;
@@ -107,7 +111,11 @@ extern void CAN_cmd_chassis_reset_ID(void);
   */
 extern void CAN_cmd_chassis(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4);
 extern void CAN_cmd_gimbal_6020(int16_t pitch, int16_t yaw);
+
 extern void CAN_cmd_chassis_shoot(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4);
+
+
+
 void CAN_CMD_Extra3508(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4);
 
 /**
@@ -161,6 +169,6 @@ extern const motor_measure_t *get_chassis_motor_measure_point(uint8_t i);
 
 const motor_measure_t *get_shoot_motor_point(uint8_t i);
 
-void CAN_cmd_chassis_shoot(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4);
+
 
 #endif

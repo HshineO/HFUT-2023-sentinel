@@ -56,9 +56,9 @@
 
 #define INS_TASK_INIT_TIME 7 //任务开始初期 delay 一段时间
 
-#define INS_YAW_ADDRESS_OFFSET    0
-#define INS_PITCH_ADDRESS_OFFSET  1//1
-#define INS_ROLL_ADDRESS_OFFSET   2//2  哨兵C板安装位置与官步不同
+#define INS_YAW_ADDRESS_OFFSET		0
+#define INS_ROLL_ADDRESS_OFFSET		1//1
+#define INS_PITCH_ADDRESS_OFFSET	2//2  哨兵C板安装位置与官步不同
 
 #define INS_GYRO_X_ADDRESS_OFFSET 0
 #define INS_GYRO_Y_ADDRESS_OFFSET 1

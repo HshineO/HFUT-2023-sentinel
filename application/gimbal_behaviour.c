@@ -273,8 +273,31 @@ static void gimbal_relative_angle_control(fp32 *yaw, fp32 *pitch, gimbal_control
   */
 static void gimbal_motionless_control(fp32 *yaw, fp32 *pitch, gimbal_control_t *gimbal_control_set);
 
+/**
+  * @brief          when gimbal behaviour mode is GIMBAL_MOTIONLESS, the function is called
+  *                 and gimbal control mode is encode mode. 
+  * @param[out]     yaw: yaw axia relative angle increment,  unit rad
+  * @param[out]     pitch: pitch axia relative angle increment, unit rad
+  * @param[in]      gimbal_control_set: gimbal data
+  * @retval         none
+  */
+/**
+  * @brief          视觉模块未识别到目标时，云台进入巡航模式，
+  * @author         RM
+  * @param[in]      yaw: yaw轴角度控制，为角度的增量 单位 rad
+  * @param[in]      pitch: pitch轴角度控制，为角度的增量 单位 rad
+  * @param[in]      gimbal_control_set:云台数据指针
+  * @retval         none
+  */
+static void gimbal_searching(fp32 *yaw, fp32 *pitch, gimbal_control_t *gimbal_control_set);
+
+// 巡航模式
+static void gimbal_scan_start(gimbal_control_t *gimbal_scan);
+static void gimbal_scan_Callback(TimerHandle_t xTimer);
+static void gimbal_scan_stop(gimbal_control_t *gimbal_scan);
+
 //云台行为状态机
-static gimbal_behaviour_e gimbal_behaviour = GIMBAL_ZERO_FORCE;
+gimbal_behaviour_e gimbal_behaviour = GIMBAL_ZERO_FORCE;
 
 /**
   * @brief          the function is called by gimbal_set_mode function in gimbal_task.c
@@ -307,8 +330,8 @@ void gimbal_behaviour_mode_set(gimbal_control_t *gimbal_mode_set)
     }
     else if (gimbal_behaviour == GIMBAL_INIT)
     {
-        gimbal_mode_set->gimbal_yaw_motor.gimbal_motor_mode = GIMBAL_MOTOR_ENCONDE;
-        gimbal_mode_set->gimbal_pitch_motor.gimbal_motor_mode = GIMBAL_MOTOR_ENCONDE;
+        gimbal_mode_set->gimbal_yaw_motor.gimbal_motor_mode = GIMBAL_MOTOR_GYRO;
+        gimbal_mode_set->gimbal_pitch_motor.gimbal_motor_mode = GIMBAL_MOTOR_GYRO;
     }
     else if (gimbal_behaviour == GIMBAL_CALI)
     {
@@ -329,6 +352,11 @@ void gimbal_behaviour_mode_set(gimbal_control_t *gimbal_mode_set)
     {
         gimbal_mode_set->gimbal_yaw_motor.gimbal_motor_mode = GIMBAL_MOTOR_ENCONDE;
         gimbal_mode_set->gimbal_pitch_motor.gimbal_motor_mode = GIMBAL_MOTOR_ENCONDE;
+    }
+	else if (gimbal_behaviour == GIMBAL_SCAN)
+    {
+        gimbal_mode_set->gimbal_yaw_motor.gimbal_motor_mode = GIMBAL_MOTOR_GYRO;
+        gimbal_mode_set->gimbal_pitch_motor.gimbal_motor_mode = GIMBAL_MOTOR_GYRO;
     }
 }
 
@@ -354,15 +382,21 @@ void gimbal_behaviour_control_set(fp32 *add_yaw, fp32 *add_pitch, gimbal_control
     {
         return;
     }
-
+	
+//	if (gimbal_behaviour != GIMBAL_SCAN && gimbal_control_set->last_gimbal_mode == GIMBAL_SCAN)
+//	{
+//		gimbal_scan_stop(gimbal_control_set);
+//	}
 
     if (gimbal_behaviour == GIMBAL_ZERO_FORCE)
     {
         gimbal_zero_force_control(add_yaw, add_pitch, gimbal_control_set);
+		//gimbal_scan_stop(gimbal_control_set);
     }
     else if (gimbal_behaviour == GIMBAL_INIT)
     {
         gimbal_init_control(add_yaw, add_pitch, gimbal_control_set);
+		//gimbal_scan_stop(gimbal_control_set);
     }
     else if (gimbal_behaviour == GIMBAL_CALI)
     {
@@ -371,6 +405,7 @@ void gimbal_behaviour_control_set(fp32 *add_yaw, fp32 *add_pitch, gimbal_control
     else if (gimbal_behaviour == GIMBAL_ABSOLUTE_ANGLE)
     {
         gimbal_absolute_angle_control(add_yaw, add_pitch, gimbal_control_set);
+		//gimbal_scan_stop(gimbal_control_set);
     }
     else if (gimbal_behaviour == GIMBAL_RELATIVE_ANGLE)
     {
@@ -380,6 +415,12 @@ void gimbal_behaviour_control_set(fp32 *add_yaw, fp32 *add_pitch, gimbal_control
     {
         gimbal_motionless_control(add_yaw, add_pitch, gimbal_control_set);
     }
+	else if (gimbal_behaviour == GIMBAL_SCAN)
+    {
+        //gimbal_scan_start(gimbal_control_set);
+        gimbal_searching(add_yaw, add_pitch, gimbal_control_set);
+    }
+
 
 }
 
@@ -506,12 +547,20 @@ static void gimbal_behavour_set(gimbal_control_t *gimbal_mode_set)
     }
     else if (switch_is_mid(gimbal_mode_set->gimbal_rc_ctrl->rc.s[GIMBAL_MODE_CHANNEL]))
     {
-        gimbal_behaviour = GIMBAL_RELATIVE_ANGLE;
+        //gimbal_behaviour = GIMBAL_SCAN;			// GIMBAL_RELATIVE_ANGLE;
+        gimbal_behaviour = GIMBAL_ABSOLUTE_ANGLE;
     }
     else if (switch_is_up(gimbal_mode_set->gimbal_rc_ctrl->rc.s[GIMBAL_MODE_CHANNEL]))
     {
         gimbal_behaviour = GIMBAL_ABSOLUTE_ANGLE;
     }
+
+    if (gimbal_mode_set->gimbal_scan_flag)
+    {
+      /* code */
+      gimbal_behaviour = GIMBAL_SCAN;
+    }
+    
 
     if( toe_is_error(DBUS_TOE))
     {
@@ -696,7 +745,7 @@ static void gimbal_absolute_angle_control(fp32 *yaw, fp32 *pitch, gimbal_control
     rc_deadband_limit(gimbal_control_set->gimbal_rc_ctrl->rc.ch[YAW_CHANNEL], yaw_channel, RC_DEADBAND);
     rc_deadband_limit(gimbal_control_set->gimbal_rc_ctrl->rc.ch[PITCH_CHANNEL], pitch_channel, RC_DEADBAND);
 
-    *yaw = yaw_channel * YAW_RC_SEN - gimbal_control_set->gimbal_rc_ctrl->mouse.x * YAW_MOUSE_SEN;
+    *yaw = - yaw_channel * YAW_RC_SEN - gimbal_control_set->gimbal_rc_ctrl->mouse.x * YAW_MOUSE_SEN;
     *pitch = pitch_channel * PITCH_RC_SEN + gimbal_control_set->gimbal_rc_ctrl->mouse.y * PITCH_MOUSE_SEN;
 
 
@@ -793,4 +842,141 @@ static void gimbal_motionless_control(fp32 *yaw, fp32 *pitch, gimbal_control_t *
     }
     *yaw = 0.0f;
     *pitch = 0.0f;
+}
+
+/**
+  * @brief          when gimbal behaviour mode is GIMBAL_MOTIONLESS, the function is called
+  *                 and gimbal control mode is encode mode. 
+  * @param[out]     yaw: yaw axia relative angle increment,  unit rad
+  * @param[out]     pitch: pitch axia relative angle increment, unit rad
+  * @param[in]      gimbal_control_set: gimbal data
+  * @retval         none
+  */
+/**
+  * @brief          视觉模块未识别到目标时，云台进入巡航模式，
+  * @author         RM
+  * @param[in]      yaw: yaw轴角度控制，为角度的增量 单位 rad
+  * @param[in]      pitch: pitch轴角度控制，为角度的增量 单位 rad
+  * @param[in]      gimbal_control_set:云台数据指针
+  * @retval         none
+  */
+static void gimbal_searching(fp32 *yaw, fp32 *pitch, gimbal_control_t *gimbal_control_set)
+{
+	if (yaw == NULL || pitch == NULL || gimbal_control_set == NULL)
+	{
+		return;
+	}
+	static uint8_t gimbal_yaw_flag = 1;
+	static uint8_t gimbal_pitch_flag = 0;
+	static fp32 gimbal_yaw_end_angle = 0.0f;
+	static fp32 gimbal_pitch_end_angle = 0.0f;
+  static uint8_t init_flag=0;
+
+
+  if (init_flag!=1)
+  {
+    gimbal_yaw_end_angle = gimbal_control_set->gimbal_yaw_motor.max_relative_angle;
+    //rad_format(gimbal_control_set->gimbal_yaw_motor.absolute_angle + 0.25*PI);
+    gimbal_pitch_end_angle = gimbal_control_set->gimbal_pitch_motor.min_relative_angle+0.1;
+    //rad_format(gimbal_control_set->gimbal_pitch_motor.absolute_angle + 0.05*PI);
+    init_flag = 1;
+  }
+  
+  *yaw += TURN_SPEED*3;
+	// if (gimbal_yaw_flag == 1)
+	// {
+	// 	*yaw += TURN_SPEED*2;
+	// }
+	// //到达最大后停止
+	// if (gimbal_yaw_flag == 1 && fabs(rad_format(gimbal_yaw_end_angle - gimbal_control_set->gimbal_yaw_motor.absolute_angle)) < 0.01f)
+	// {
+	// 	gimbal_yaw_flag = 0;
+	// 	gimbal_yaw_end_angle = gimbal_control_set->gimbal_yaw_motor.min_relative_angle;
+	// }
+	// 	if (gimbal_yaw_flag == 0)
+	// {
+	// 	*yaw -= TURN_SPEED*2;
+	// }
+	// //到达最小后停止
+	// if (gimbal_yaw_flag == 0 && fabs(rad_format(gimbal_yaw_end_angle - gimbal_control_set->gimbal_yaw_motor.absolute_angle)) < 0.01f)
+	// {
+	// 	gimbal_yaw_flag = 1;
+	// 	gimbal_yaw_end_angle = gimbal_control_set->gimbal_yaw_motor.max_relative_angle;
+	// }
+		
+	//pitch
+	//到达9°后停止
+	
+
+	if (gimbal_pitch_flag == 1)
+	{
+		*pitch += TURN_SPEED*2;
+	}
+	//到达18°后停止
+	if (gimbal_pitch_flag == 1 && fabs(gimbal_pitch_end_angle - gimbal_control_set->gimbal_pitch_motor.relative_angle) < 0.1f)
+	{
+		gimbal_pitch_flag = 0;
+		gimbal_pitch_end_angle = gimbal_control_set->gimbal_pitch_motor.min_relative_angle;
+	}
+	if (gimbal_pitch_flag == 0)
+	{
+		*pitch -= TURN_SPEED*2;
+	}
+	//到达18°后停止
+	if (gimbal_pitch_flag == 0 && fabs(gimbal_pitch_end_angle - gimbal_control_set->gimbal_pitch_motor.relative_angle) < 0.1f)
+	{
+		gimbal_pitch_flag = 1;
+		gimbal_pitch_end_angle = gimbal_control_set->gimbal_pitch_motor.max_relative_angle;
+	}
+}
+
+/* 以下为采用定时器模式的巡航实现 移植整合时采用该版 */
+
+static void gimbal_scan_start(gimbal_control_t *gimbal_scan)
+{
+	if (gimbal_scan->gimbal_scan_flag == 0)
+	{
+		gimbal_scan->gimbal_scan_flag = 1.0f;
+		gimbal_scan->gimbal_scan_timer_handle = xTimerCreate( "gimbal_scan", 1000 / portTICK_PERIOD_MS, pdTRUE,
+															  (void *)gimbal_scan, gimbal_scan_Callback );
+		xTimerStart( gimbal_scan->gimbal_scan_timer_handle, 0 );
+	}
+	else
+	{
+		if (xTimerIsTimerActive(gimbal_scan->gimbal_scan_timer_handle) != pdTRUE)
+		xTimerStart( gimbal_scan->gimbal_scan_timer_handle, 0 );
+	}
+}
+
+static void gimbal_scan_Callback(TimerHandle_t xTimer)
+{
+	gimbal_control_t* gimbal_scan = (gimbal_control_t *)pvTimerGetTimerID(xTimer);
+	if (gimbal_scan->gimbal_scan_flag != 0)
+	{
+		gimbal_scan->gimbal_scan_flag = -gimbal_scan->gimbal_scan_flag;
+		//gimbal_scan->gimbal_pitch_motor.motor_gyro_set = -1.0f * gimbal_scan->gimbal_scan_flag;	//调试速度环参数用
+
+//		// 方案1 第一次进入中断时flag = 1
+//		static int8_t scan_flag_pitch	= 1;
+//		static int8_t scan_flag_yaw		= 1;
+//		
+//		gimbal_scan->gimbal_pitch_motor.relative_angle_set += scan_flag_pitch  *0.006f;
+//		gimbal_scan->gimbal_yaw_motor.relative_angle_set += scan_flag_yaw * 0.004f;
+
+//		if (gimbal_scan->gimbal_pitch_motor.relative_angle_set >= pitch_limit_up || gimbal_scan->gimbal_pitch_motor.relative_angle_set <= pitch_limit_down)
+//			scan_flag_pitch = -scan_flag_pitch;
+//		if (gimbal_scan->gimbal_yaw_motor.relative_angle_set >= yaw_limit_up || gimbal_scan->gimbal_yaw_motor.relative_angle_set <= yaw_limit_down)
+//			scan_flag_yaw = -scan_flag_yaw;
+	}
+}
+
+static void gimbal_scan_stop(gimbal_control_t *gimbal_scan)
+{
+	if (gimbal_scan->gimbal_scan_timer_handle != NULL)
+	{
+		xTimerStop(gimbal_scan->gimbal_scan_timer_handle, 0);
+		gimbal_scan->gimbal_scan_flag = 0.0f;
+		xTimerDelete(gimbal_scan->gimbal_scan_timer_handle, 0);
+		gimbal_scan->gimbal_scan_timer_handle = NULL;
+	}
 }

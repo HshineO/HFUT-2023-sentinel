@@ -43,7 +43,7 @@ extern CAN_HandleTypeDef hcan2;
 motor data,  0:chassis motor1 3508;1:chassis motor3 3508;2:chassis motor3 3508;3:chassis motor4 3508;
 4:yaw gimbal motor 6020;5:pitch gimbal motor 6020;6:trigger motor 2006;
 电机数据, 0:底盘电机1 3508电机,  1:底盘电机2 3508电机,2:底盘电机3 3508电机,3:底盘电机4 3508电机;
-4:yaw云台电机 6020电机; 5:pitch云台电机 6020电机; 6:拨弹电机 2006电机*/
+4:pitch云台电机 6020电机; 5:yaw云台电机 6020电机; 6:拨弹电机 2006电机*/
 static motor_measure_t motor_chassis[7];
 
 static motor_measure_t shoot_motor[6];  
@@ -81,7 +81,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
           case CAN_3508_M3_ID:
           case CAN_3508_M4_ID:
           case CAN_YAW_MOTOR_ID:
-          //case CAN_PIT_MOTOR_ID:
+          case CAN_PIT_MOTOR_ID:
           //case CAN_TRIGGER_MOTOR_ID:
           {
               static uint8_t i = 0;
@@ -102,7 +102,6 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
     {
       switch (rx_header.StdId)
       {
-          case CAN_PIT_MOTOR_ID:
           //case CAN_PIT_MOTOR_ID:
           //case CAN_TRIGGER_MOTOR_ID:
           {
@@ -114,9 +113,12 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
               break;
           }
           
-          case CAN_TRIGER_L_ID: get_motor_measure(&shoot_motor[1],rx_data);break;
-          case CAN_TRIGER_R_ID: get_motor_measure(&shoot_motor[2],rx_data);break;
-          case CAN_DIAL_ID: get_motor_measure(&shoot_motor[0],rx_data);break;
+          case CAN_TRIGER_high_L_ID: get_motor_measure(&shoot_motor[0],rx_data);break;//摩擦轮
+          case CAN_TRIGER_low_L_ID: get_motor_measure(&shoot_motor[1],rx_data);break;
+					case CAN_TRIGER_high_R_ID: get_motor_measure(&shoot_motor[3],rx_data);break;
+          case CAN_TRIGER_low_R_ID: get_motor_measure(&shoot_motor[4],rx_data);break;
+          case CAN_DIAL_L_ID: get_motor_measure(&shoot_motor[2],rx_data);break;//拨弹
+          case CAN_DIAL_R_ID: get_motor_measure(&shoot_motor[5],rx_data);break;
 
           default:
           {
@@ -153,10 +155,10 @@ void CAN_cmd_gimbal(int16_t yaw, int16_t pitch, int16_t shoot, int16_t rev)
     gimbal_tx_message.IDE = CAN_ID_STD;
     gimbal_tx_message.RTR = CAN_RTR_DATA;
     gimbal_tx_message.DLC = 0x08;
-    gimbal_can_send_data[0] = (yaw >> 8);
-    gimbal_can_send_data[1] = yaw;
-    gimbal_can_send_data[2] = (pitch >> 8);
-    gimbal_can_send_data[3] = pitch;
+    gimbal_can_send_data[2] = (yaw >> 8);
+    gimbal_can_send_data[3] = yaw;
+    gimbal_can_send_data[0] = (pitch >> 8);
+    gimbal_can_send_data[1] = pitch;
     gimbal_can_send_data[4] = (shoot >> 8);
     gimbal_can_send_data[5] = shoot;
     gimbal_can_send_data[6] = (rev >> 8);
@@ -164,23 +166,23 @@ void CAN_cmd_gimbal(int16_t yaw, int16_t pitch, int16_t shoot, int16_t rev)
     HAL_CAN_AddTxMessage(&GIMBAL_CAN, &gimbal_tx_message, gimbal_can_send_data, &send_mail_box);
 }
 
-void CAN_cmd_gimbal_yaw(int16_t yaw)
+void CAN_cmd_gimbal_6020(int16_t pitch, int16_t yaw)
 {
-    uint32_t send_mail_box;
-    gimbal_tx_message.StdId = CAN_GIMBAL_ALL_ID;
-    gimbal_tx_message.IDE = CAN_ID_STD;
-    gimbal_tx_message.RTR = CAN_RTR_DATA;
-    gimbal_tx_message.DLC = 0x08;
-    gimbal_can_send_data[0] = (yaw >> 8);
-    gimbal_can_send_data[1] = yaw;
-    gimbal_can_send_data[2] = 0;
-    gimbal_can_send_data[3] = 0;
-    gimbal_can_send_data[4] = 0;
-    gimbal_can_send_data[5] = 0;
-    gimbal_can_send_data[6] = 0;
-    gimbal_can_send_data[7] = 0;
+	uint32_t send_mail_box;
+	gimbal_tx_message.StdId = CAN_GIMBAL_ALL_ID;
+	gimbal_tx_message.IDE = CAN_ID_STD;
+	gimbal_tx_message.RTR = CAN_RTR_DATA;
+	gimbal_tx_message.DLC = 0x08;
+	gimbal_can_send_data[0] = (pitch >> 8);
+	gimbal_can_send_data[1] = pitch;
+	gimbal_can_send_data[2] = (yaw >> 8);
+	gimbal_can_send_data[3] = yaw;
+	gimbal_can_send_data[4] = 0;
+	gimbal_can_send_data[5] = 0;
+	gimbal_can_send_data[6] = 0;
+	gimbal_can_send_data[7] = 0;
 
-    HAL_CAN_AddTxMessage(&hcan1, &gimbal_tx_message, gimbal_can_send_data, &send_mail_box);
+	HAL_CAN_AddTxMessage(&hcan1, &gimbal_tx_message, gimbal_can_send_data, &send_mail_box);
 }
 
 /**
@@ -267,6 +269,26 @@ void CAN_CMD_Extra3508(int16_t motor1, int16_t motor2, int16_t motor3, int16_t m
   HAL_CAN_AddTxMessage(&hcan2, &extra_tx_message, extra_can_send_data, &send_mail_box);
 }
 
+void CAN_cmd_chassis_shoot(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4)
+{
+    uint32_t send_mail_box;
+    chassis_tx_message.StdId = 0x1FF;
+    chassis_tx_message.IDE = CAN_ID_STD;
+    chassis_tx_message.RTR = CAN_RTR_DATA;
+    chassis_tx_message.DLC = 0x08;
+    chassis_can_send_data[0] = motor1 >> 8;
+    chassis_can_send_data[1] = motor1;
+    chassis_can_send_data[2] = motor2 >> 8;
+    chassis_can_send_data[3] = motor2;
+    chassis_can_send_data[4] = motor3 >> 8;
+    chassis_can_send_data[5] = motor3;
+    chassis_can_send_data[6] = motor4 >> 8;
+    chassis_can_send_data[7] = motor4;
+    
+
+    HAL_CAN_AddTxMessage(&hcan2, &chassis_tx_message, chassis_can_send_data, &send_mail_box);
+}
+
 /**
   * @brief          return the yaw 6020 motor data point
   * @param[in]      none
@@ -279,7 +301,7 @@ void CAN_CMD_Extra3508(int16_t motor1, int16_t motor2, int16_t motor3, int16_t m
   */
 const motor_measure_t *get_yaw_gimbal_motor_measure_point(void)
 {
-    return &motor_chassis[4];
+    return &motor_chassis[5];
 }
 
 /**
@@ -294,7 +316,7 @@ const motor_measure_t *get_yaw_gimbal_motor_measure_point(void)
   */
 const motor_measure_t *get_pitch_gimbal_motor_measure_point(void)
 {
-    return &motor_chassis[5];
+    return &motor_chassis[4];
 }
 
 
@@ -332,24 +354,4 @@ const motor_measure_t *get_chassis_motor_measure_point(uint8_t i)
 const motor_measure_t *get_shoot_motor_point(uint8_t i)//上云台 0 1 2 拨弹 左摩擦轮 右摩擦轮 下云台 3 4 5 拨弹 左摩擦轮 右摩擦轮
 {
   return &shoot_motor[i];
-}
-
-void CAN_cmd_chassis_shoot(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4)
-{
-    uint32_t send_mail_box;
-    chassis_tx_message.StdId = 0x1FF;
-    chassis_tx_message.IDE = CAN_ID_STD;
-    chassis_tx_message.RTR = CAN_RTR_DATA;
-    chassis_tx_message.DLC = 0x08;
-    chassis_can_send_data[0] = motor1 >> 8;
-    chassis_can_send_data[1] = motor1;
-    chassis_can_send_data[2] = motor2 >> 8;
-    chassis_can_send_data[3] = motor2;
-    chassis_can_send_data[4] = motor3 >> 8;
-    chassis_can_send_data[5] = motor3;
-    chassis_can_send_data[6] = motor4 >> 8;
-    chassis_can_send_data[7] = motor4;
-    
-
-    HAL_CAN_AddTxMessage(&hcan2, &chassis_tx_message, chassis_can_send_data, &send_mail_box);
 }
