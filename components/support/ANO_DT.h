@@ -5,7 +5,5 @@
 
 void ANODT_SendF1(int32_t Angle,int32_t speed_rpm,int32_t Angle_target,int32_t speed_target);
 
-void Buzz_Callback();
-
 #endif
 

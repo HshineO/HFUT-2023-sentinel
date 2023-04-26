@@ -185,9 +185,8 @@ void chassis_task(void const *pvParameters)
             {
                 //send control current
                 //发送控制电流
-								//CAN_cmd_chassis(0, chassis_move.motor_chassis[1].give_current,0,0 );
-//                CAN_cmd_chassis(chassis_move.motor_chassis[0].give_current, chassis_move.motor_chassis[1].give_current,
-//                                chassis_move.motor_chassis[2].give_current, chassis_move.motor_chassis[3].give_current);
+                CAN_cmd_chassis(chassis_move.motor_chassis[0].give_current, chassis_move.motor_chassis[1].give_current,
+                                chassis_move.motor_chassis[2].give_current, chassis_move.motor_chassis[3].give_current);
             }
             //ANODT_SendF1(chassis_move.motor_chassis[0].speed*1000,chassis_move.motor_chassis[1].speed*1000,
 				//		 chassis_move.motor_chassis[2].speed*1000,chassis_move.motor_chassis[3].speed*1000);

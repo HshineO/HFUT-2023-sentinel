@@ -17,10 +17,6 @@
 
 uint8_t DataSendBuf[100];
 
-void Buzz_Callback()
-{
-	buzzer_off();
-}
 
 void ANODT_SendF1(int32_t Angle,int32_t speed_rpm,int32_t Angle_target,int32_t speed_target)//F1¡ÈªÓ∏Ò Ω÷°
 {
