@@ -51,9 +51,8 @@
 #define MOTOR_2006_ENCODER_HALF_ROUND					(MOTOR_2006_ENCODER_A_ROUND/2)
 #define MOTOR_2006_ENCODER_ONE_BULLET					(MOTOR_2006_ENCODER_A_ROUND/8)
 #define MOTOR_2006_ENCODER_ONE_SHOOT					(MOTOR_2006_ENCODER_A_ROUND/8)
-//#define MOTOR_2006_ENCODER_ONE_BULLET					49152
-#define MOTOR_2006_ENCODER_ROUND_ERROR				 0
-#define MOTOR_2006_ENCODER_COUNT_MAX					 36
+#define MOTOR_2006_ENCODER_ROUND_ERROR					0
+#define MOTOR_2006_ENCODER_COUNT_MAX					36
 
 /****************** 3508 电机的旋转速度 ********************/
 #define EXTRA_3508_ROTATE_SPEED_30						  	6800.0f//6800.0f
@@ -61,16 +60,16 @@
 #define EXTRA_3508_ROTATE_SPEED_15						  	4100.0f
 
 /****************** 2006 电机的旋转速度 ********************/
-#define MOTOR_2006_SLOW_ROTATE_SPEED					1000.0f
-#define MOTOR_2006_QUICK_ROTATE_SPEED					3000.0f		// 只用到这个，慢转没有用到
-
+#define MOTOR_2006_SLOW_ROTATE_SPEED					    1000.0f
+#define MOTOR_2006_QUICK_ROTATE_SPEED					    3000.0f		//只用到这个，慢转没有用到
+#define MOTER_2006_8_BULLETS_PERSEC                         4000.0f     //哨兵专用冷却
 /****************** 电机的旋转方向 ********************/
-#define EXTRA_3508_high_L_ROTATE_DIR							1
+#define EXTRA_3508_high_L_ROTATE_DIR					    1
 #define EXTRA_3508_low_L_ROTATE_DIR							1
-#define EXTRA_3508_high_R_ROTATE_DIR							0
+#define EXTRA_3508_high_R_ROTATE_DIR						0
 #define EXTRA_3508_low_R_ROTATE_DIR							0
-#define MOTOR_2006_L_ROTATE_DIR							  0
-#define MOTOR_2006_R_ROTATE_DIR							  0
+#define MOTOR_2006_L_ROTATE_DIR							    0
+#define MOTOR_2006_R_ROTATE_DIR							    0
 
 
 
@@ -78,17 +77,9 @@
 #define CONTROL_GUARD_TO_ATTACK			KEY_PRESSED_OFFSET_Q
 #define CONTROL_GUARD_TO_FLEE			KEY_PRESSED_OFFSET_E
 
-/****************** 电机堵转参数 ********************/
-#define MOTOR_2006_LOCKED_ROTOR_ERROR			2
-#define MOTOR_2006_LOCKED_ROTOR_SHORT			50
-#define MOTOR_2006_LOCKED_ROTOR_LONG			300
-#define MOTOR_2006_LOCKED_ROTOR_REVERSAL		200
-#define MOTOR_2006_LOCKED_ROTOR_MAX				500
-#define MOTOR_2006_LOCKED_ROTOR_MIN				0
-
-#define	NORMAL_MODE 					      0x00			// 正常模式，正常工作
-#define	MPU6050_ANGLE_INIT_MODE			0x01			// 陀螺仪初始化
-#define	SERVO_ANGLE_SET_MODE			  0x02			// 舵机角度设置
+#define	NORMAL_MODE							0x00			// 正常模式，正常工作
+#define	MPU6050_ANGLE_INIT_MODE				0x01			// 陀螺仪初始化
+#define	SERVO_ANGLE_SET_MODE				0x02			// 舵机角度设置
 
 //射击发射开关通道数据
 #define SHOOT_RC_MODE_CHANNEL       1
@@ -126,11 +117,26 @@
 #define SWITCH_TRIGGER_ON           0
 #define SWITCH_TRIGGER_OFF          1
 
-//卡单时间 以及反转时间
+/********** 靠循环的防堵转 *************/
 #define BLOCK_TRIGGER_SPEED         1.0f
 #define BLOCK_TIME                  700
 #define REVERSE_TIME                500
 #define REVERSE_SPEED_LIMIT         13.0f
+
+/******** 靠软件定时器的防堵转 *******/
+#define Block_Time_Tick             100
+#define MOTOR_2006_LOCKED_ROTOR_SHORT_Tick		5
+#define MOTOR_2006_LOCKED_ROTOR_LONG_Tick		30
+#define MOTOR_2006_LOCKED_ROTOR_REVERSAL_Tick	20
+#define MOTOR_2006_LOCKED_ROTOR_MAX_Tick		50
+
+/****************** 电机堵转参数 ********************/
+#define MOTOR_2006_LOCKED_ROTOR_ERROR			2
+#define MOTOR_2006_LOCKED_ROTOR_SHORT			50
+#define MOTOR_2006_LOCKED_ROTOR_LONG			300
+#define MOTOR_2006_LOCKED_ROTOR_REVERSAL		200
+#define MOTOR_2006_LOCKED_ROTOR_MAX				500
+#define MOTOR_2006_LOCKED_ROTOR_MIN				0
 
 #define PI_FOUR                     0.78539816339744830961566084581988f
 #define PI_TEN                      0.314f
@@ -148,6 +154,15 @@
 
 
 #define SHOOT_HEAT_REMAIN_VALUE     80
+
+#define shoot_fric1_on(pwm) fric1_on((pwm)) //摩擦轮1pwm宏定义
+#define shoot_fric2_on(pwm) fric2_on((pwm)) //摩擦轮2pwm宏定义
+#define shoot_fric_off()    fric_off()      //关闭两个摩擦轮
+
+#define shoot_laser_on()    laser_on()      //激光开启宏定义
+#define shoot_laser_off()   laser_off()     //激光关闭宏定义
+//微动开关IO
+#define BUTTEN_TRIG_PIN HAL_GPIO_ReadPin(BUTTON_TRIG_GPIO_Port, BUTTON_TRIG_Pin)
 
 typedef enum
 {
@@ -212,7 +227,7 @@ typedef struct
 	int16_t locked_rotor_time_r;					// 拨弹轮堵转时间检测
 	int16_t reversal_time_r;						// 反转时间计算
 }User_Motor_t;
-
+	
 typedef struct
 {
     shoot_mode_e shoot_mode;
@@ -259,5 +274,8 @@ void Extra_3508_Data_Processing( User_Motor_t *User_Motor_DataType );
 void Motor_2006_Data_Processing( User_Motor_t *User_Motor_DataType );
 void Extra_3508_Speed_PID( User_Motor_t *User_Motor_PIDType );
 void Motor_2006_PID_Set( User_Motor_t *User_Motor_PIDType );
+void Anti_Locked_L_Callback( void const * argument );
+void Anti_Locked_R_Callback( void const * argument );
+
 
 #endif /* __SHOOT_TASK_H */

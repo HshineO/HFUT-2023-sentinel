@@ -391,8 +391,8 @@ void gimbal_task(void const *pvParameters)
         CAN_cmd_gimbal_6020( pitch_can_set_current, yaw_can_set_current ); //#pitch_can_set_current
       }
     }
-    //ANODT_SendF1(gimbal_control.gimbal_pitch_motor.absolute_angle * 100, gimbal_control.gimbal_pitch_motor.absolute_angle_set * 100,
-    //             gimbal_control.gimbal_pitch_motor.motor_gyro * 100, gimbal_control.gimbal_pitch_motor.motor_gyro_set * 100);
+    ANODT_SendF1(gimbal_control.gimbal_yaw_motor.absolute_angle * 100, gimbal_control.gimbal_yaw_motor.absolute_angle_set * 100,
+                 gimbal_control.gimbal_yaw_motor.motor_gyro * 100, gimbal_control.gimbal_yaw_motor.motor_gyro_set * 100);
 
 #if GIMBAL_TEST_MODE
     J_scope_gimbal_test();
@@ -674,7 +674,7 @@ static void gimbal_init(gimbal_control_t *init)
   init->gimbal_pitch_motor.gimbal_motor_measure = get_pitch_gimbal_motor_measure_point();
   // 陀螺仪数据指针获取
   init->gimbal_INT_angle_point = get_INS_angle_point();
-  init->gimbal_INT_gyro_point = get_gyro_data_point();
+  init->gimbal_INT_gyro_point  = get_gyro_data_point();
   // 遥控器数据指针获取
   init->gimbal_rc_ctrl = get_remote_control_point();
   // 初始化电机模式
@@ -751,7 +751,7 @@ static void gimbal_feedback_update(gimbal_control_t *feedback_update)
   {
     return;
   }
-  // 云台数据更新
+  //absloute_angle为陀螺仪返回的数据，realtive_angle为编码器的值换算而来；
   feedback_update->gimbal_pitch_motor.absolute_angle = *(feedback_update->gimbal_INT_angle_point + 1) + 1.57f; // 哨兵C板躺着放的
 
 #if PITCH_TURN
@@ -775,7 +775,11 @@ static void gimbal_feedback_update(gimbal_control_t *feedback_update)
   feedback_update->gimbal_yaw_motor.relative_angle = motor_ecd_to_angle_change(feedback_update->gimbal_yaw_motor.gimbal_motor_measure->ecd,
                                                                                feedback_update->gimbal_yaw_motor.offset_ecd);
 #endif
-  feedback_update->gimbal_yaw_motor.motor_gyro = -arm_cos_f32(feedback_update->gimbal_pitch_motor.relative_angle) * (*(feedback_update->gimbal_INT_gyro_point + INS_GYRO_Y_ADDRESS_OFFSET)) - arm_sin_f32(feedback_update->gimbal_pitch_motor.relative_angle) * (*(feedback_update->gimbal_INT_gyro_point + INS_GYRO_Z_ADDRESS_OFFSET));
+
+  feedback_update->gimbal_yaw_motor.motor_gyro = -arm_cos_f32(feedback_update->gimbal_pitch_motor.relative_angle) 
+												* (*(feedback_update->gimbal_INT_gyro_point + INS_GYRO_Y_ADDRESS_OFFSET)) 	
+												- arm_sin_f32(feedback_update->gimbal_pitch_motor.relative_angle) 
+												* (*(feedback_update->gimbal_INT_gyro_point + INS_GYRO_Z_ADDRESS_OFFSET));
 }
 
 /**
@@ -864,122 +868,121 @@ static void gimbal_mode_change_control_transit(gimbal_control_t *gimbal_mode_cha
  */
 static void gimbal_set_control(gimbal_control_t *set_control)
 {
-  if (set_control == NULL)
-  {
-    return;
-  }
+	if (set_control == NULL)
+	{
+		return;
+	}
 
-  fp32 add_yaw_angle = 0.0f;
-  fp32 add_pitch_angle = 0.0f;
+	fp32 add_yaw_angle = 0.0f;
+	fp32 add_pitch_angle = 0.0f;
 
-  gimbal_behaviour_control_set(&add_yaw_angle, &add_pitch_angle, set_control);
+	gimbal_behaviour_control_set(&add_yaw_angle, &add_pitch_angle, set_control);
   
 	if (set_control->gimbal_control_mode == GIMBAL_AUTO)
-  {
+	{
 		trajectory_cal.v0 = 27;  //哨兵弹速30
 		if(recievePacket.x == 0 && recievePacket.y == 0 && recievePacket.z == 0 
-       && recievePacket.vx == 0 && recievePacket.vy == 0 && recievePacket.vz == 0 )
+           && recievePacket.vx == 0 && recievePacket.vy == 0 && recievePacket.vz == 0 )
 		{
       //未发现目标
 			no_find_cnt++;
-      if (no_find_cnt >= 2000)
-      {
-        set_control->gimbal_scan_flag = 1;
-      }
-			//发现了目标
-      else
-				set_control->gimbal_scan_flag = 0;
-			}
-			else
+			if (no_find_cnt >= 2000)
 			{
-      //弹道解算
-      no_find_cnt = 0;
-      set_control->gimbal_scan_flag = 0;
-      trajectory_cal.position_xy[0] = recievePacket.x;
-      trajectory_cal.position_xy[1] = recievePacket.y;
-      trajectory_cal.z = recievePacket.z;
-      trajectory_cal.velocity[0] = recievePacket.vx;
-      trajectory_cal.velocity[1] = recievePacket.vy;
-      trajectory_cal.velocity[2] = recievePacket.vz;
-      get_cmd_angle(&trajectory_cal);
+				set_control->gimbal_scan_flag = 1;
 			}
-  }
-	else{//在手动模式下，云台憋转了
+			//发现了目标
+			else
+				set_control->gimbal_scan_flag = 0;
+		}
+		else
+		{
+      //弹道解算
+		no_find_cnt = 0;
+		set_control->gimbal_scan_flag = 0;
+		trajectory_cal.position_xy[0] = recievePacket.x;
+		trajectory_cal.position_xy[1] = recievePacket.y;
+		trajectory_cal.z = recievePacket.z;
+		trajectory_cal.velocity[0] = recievePacket.vx;
+		trajectory_cal.velocity[1] = recievePacket.vy;
+		trajectory_cal.velocity[2] = recievePacket.vz;
+		get_cmd_angle(&trajectory_cal);
+		}
+	}
+	else//在手动模式下，云台憋转了
 		set_control->gimbal_scan_flag = 0;
   // yaw电机模式控制
-  if (set_control->gimbal_yaw_motor.gimbal_motor_mode == GIMBAL_MOTOR_RAW)
-  {
+	if (set_control->gimbal_yaw_motor.gimbal_motor_mode == GIMBAL_MOTOR_RAW)
+	{
     // raw模式下，直接发送控制值
     set_control->gimbal_yaw_motor.raw_cmd_current = add_yaw_angle;
-  }
-  else if (set_control->gimbal_yaw_motor.gimbal_motor_mode == GIMBAL_MOTOR_GYRO)
-  {
+	}
+	else if (set_control->gimbal_yaw_motor.gimbal_motor_mode == GIMBAL_MOTOR_GYRO)
+	{
     // gyro模式下，陀螺仪角度控制
-    if (set_control->gimbal_control_mode == GIMBAL_RC)
+		if (set_control->gimbal_control_mode == GIMBAL_RC)
 			gimbal_absolute_angle_nolimit_yaw(&set_control->gimbal_yaw_motor, add_yaw_angle);
-    if (set_control->gimbal_control_mode == GIMBAL_AUTO)
-    {
-      if (set_control->gimbal_scan_flag == 1)
-      {
-        gimbal_absolute_angle_nolimit_yaw(&set_control->gimbal_yaw_motor, add_yaw_angle);
-      }
-      else
+		if (set_control->gimbal_control_mode == GIMBAL_AUTO)
+		{
+			if (set_control->gimbal_scan_flag == 1)
+			{
+				gimbal_absolute_angle_nolimit_yaw(&set_control->gimbal_yaw_motor, add_yaw_angle);
+			}
+			else
         //gimbal_absolute_angle_limit_auto(&set_control->gimbal_yaw_motor, -trajectory_cal.cmd_yaw);
-        set_control->gimbal_yaw_motor.absolute_angle_set = rad_format(-trajectory_cal.cmd_yaw);
-    }
+			set_control->gimbal_yaw_motor.absolute_angle_set = rad_format(-trajectory_cal.cmd_yaw);
+		}
      
-  }
-  else if (set_control->gimbal_yaw_motor.gimbal_motor_mode == GIMBAL_MOTOR_ENCONDE)
-  {
+	}	
+	else if (set_control->gimbal_yaw_motor.gimbal_motor_mode == GIMBAL_MOTOR_ENCONDE)
+	{
     // enconde模式下，电机编码角度控制
-    if (set_control->gimbal_control_mode == GIMBAL_RC)
-      gimbal_relative_angle_limit(&set_control->gimbal_yaw_motor, add_yaw_angle);
-    if (set_control->gimbal_control_mode == GIMBAL_AUTO)
-    {
-      gimbal_absolute_angle_limit_auto(&set_control->gimbal_yaw_motor, -trajectory_cal.cmd_yaw);
-    }
+		if (set_control->gimbal_control_mode == GIMBAL_RC)
+			gimbal_relative_angle_limit(&set_control->gimbal_yaw_motor, add_yaw_angle);
+		if (set_control->gimbal_control_mode == GIMBAL_AUTO)
+		{
+			gimbal_absolute_angle_limit_auto(&set_control->gimbal_yaw_motor, -trajectory_cal.cmd_yaw);
+		}
       //
-  }
+	}
 
   // pitch电机模式控制
-  if (set_control->gimbal_pitch_motor.gimbal_motor_mode == GIMBAL_MOTOR_RAW)
-  {
+	if (set_control->gimbal_pitch_motor.gimbal_motor_mode == GIMBAL_MOTOR_RAW)
+	{
     // raw模式下，直接发送控制值
     set_control->gimbal_pitch_motor.raw_cmd_current = add_pitch_angle;
-  }
-  else if (set_control->gimbal_pitch_motor.gimbal_motor_mode == GIMBAL_MOTOR_GYRO)
-  {
+	}
+	else if (set_control->gimbal_pitch_motor.gimbal_motor_mode == GIMBAL_MOTOR_GYRO)
+	{
     // gyro模式下，陀螺仪角度控制
-    if (set_control->gimbal_control_mode == GIMBAL_RC)
-      gimbal_absolute_angle_limit(&set_control->gimbal_pitch_motor, add_pitch_angle);
-    if (set_control->gimbal_control_mode == GIMBAL_AUTO)
-    {
-      if (set_control->gimbal_scan_flag == 1)
-      {
-        gimbal_absolute_angle_limit(&set_control->gimbal_pitch_motor, add_pitch_angle);
-      }
-      else
-        gimbal_absolute_angle_limit_auto(&set_control->gimbal_pitch_motor, trajectory_cal.cmd_pitch);
-    }
+		if (set_control->gimbal_control_mode == GIMBAL_RC)
+			gimbal_absolute_angle_limit(&set_control->gimbal_pitch_motor, add_pitch_angle);
+		if (set_control->gimbal_control_mode == GIMBAL_AUTO)
+		{
+			if (set_control->gimbal_scan_flag == 1)
+			{
+				gimbal_absolute_angle_limit(&set_control->gimbal_pitch_motor, add_pitch_angle);
+			}
+			else
+				gimbal_absolute_angle_limit_auto(&set_control->gimbal_pitch_motor, trajectory_cal.cmd_pitch);
+		}
       
 
     // gimbal_absolute_angle_limit(&set_control->gimbal_pitch_motor, add_pitch_angle);
     // gimbal_absolute_angle_limit_auto(&set_control->gimbal_pitch_motor, add_pitch_angle);
-  }
-  else if (set_control->gimbal_pitch_motor.gimbal_motor_mode == GIMBAL_MOTOR_ENCONDE)
-  {
+	}
+	else if (set_control->gimbal_pitch_motor.gimbal_motor_mode == GIMBAL_MOTOR_ENCONDE)
+		{
     // enconde模式下，电机编码角度控制
-			if (set_control->gimbal_control_mode == GIMBAL_RC)
-				gimbal_relative_angle_limit(&set_control->gimbal_pitch_motor, add_pitch_angle);
-			if (set_control->gimbal_control_mode == GIMBAL_AUTO){
-				gimbal_absolute_angle_limit_auto(&set_control->gimbal_pitch_motor, trajectory_cal.cmd_pitch);
-			}
+		if (set_control->gimbal_control_mode == GIMBAL_RC)
+			gimbal_relative_angle_limit(&set_control->gimbal_pitch_motor, add_pitch_angle);
+		if (set_control->gimbal_control_mode == GIMBAL_AUTO){
+			gimbal_absolute_angle_limit_auto(&set_control->gimbal_pitch_motor, trajectory_cal.cmd_pitch);
+		}
       //gimbal_relative_angle_limit_auto(&set_control->gimbal_pitch_motor, recievePacket.cmd_pitch);
 
 //    gimbal_relative_angle_limit(&set_control->gimbal_pitch_motor, add_pitch_angle);
 //    gimbal_relative_angle_limit_auto(&set_control->gimbal_pitch_motor, add_pitch_angle);
 		}
-	}
 }
 /**
  * @brief          gimbal control mode :GIMBAL_MOTOR_GYRO, use euler angle calculated by gyro sensor to control.
@@ -1288,8 +1291,7 @@ static void J_scope_gimbal_test(void)
   yaw_ins_set_1000 = (int32_t)(gimbal_control.gimbal_yaw_motor.absolute_angle_set * 1000);
   yaw_speed_int_1000 = (int32_t)(gimbal_control.gimbal_yaw_motor.motor_gyro * 1000);
   yaw_speed_set_int_1000 = (int32_t)(gimbal_control.gimbal_yaw_motor.motor_gyro_set * 1000);
-
-  pitch_ins_int_1000 = (int32_t)(gimbal_control.gimbal_pitch_motor.absolute_angle * 1000);
+ntrol.gimbal_pitch_motor.absolute_angle * 1000);
   pitch_ins_set_1000 = (int32_t)(gimbal_control.gimbal_pitch_motor.absolute_angle_set * 1000);
   pitch_speed_int_1000 = (int32_t)(gimbal_control.gimbal_pitch_motor.motor_gyro * 1000);
   pitch_speed_set_int_1000 = (int32_t)(gimbal_control.gimbal_pitch_motor.motor_gyro_set * 1000);
@@ -1300,6 +1302,7 @@ static void J_scope_gimbal_test(void)
 #endif
 
 /**
+  pitch_ins_int_1000 = (int32_t)(gimbal_co
  * @brief          "gimbal_control" valiable initialization, include pid initialization, remote control data point initialization, gimbal motors
  *                 data point initialization, and gyro sensor angle point initialization.
  * @param[out]     gimbal_init: "gimbal_control" valiable point

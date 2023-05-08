@@ -40,22 +40,30 @@
 
 #define IMU_temp_PWM(pwm)  imu_pwm_set(pwm)                    //pwm给定
 
-#define BMI088_BOARD_INSTALL_SPIN_MATRIX    \
-  {0.0f, 1.0f, 0.0f},                     \
-  {-1.0f, 0.0f, 0.0f},                     \
-  {0.0f, 0.0f, 1.0f}                      \
-  
+//获取欧拉角, 0:yaw, 1:pitch, 2:roll：或：x，y，roll
+
+//x轴原始数据为现在Z轴的新数据//y轴原始数据为现在X轴的新数据//z轴原始数据为现在Y轴的新数据
+#define BMI088_BOARD_INSTALL_SPIN_MATRIX\
+  {0.0f, 1.0f, 0.0f},                       \
+  {0.0f, 0.0f, 1.0f},                      \
+  {1.0f, 0.0f, 0.0f}   
+//  { 0.0f, 0.0f, 1.0f},\
+//  { 1.0f, 0.0f, 0.0f},\
+//  { 0.0f, 1.0f, 1.0f} 	
+
+
+
     // {0.0f, 0.0f, 1.0f},                     \
-    // {0.0f, -1.0f, 0.0f},                     \
+    // {0.0f, -1.0f,0.0f},                     \
     // {1.0f, 0.0f, 0.0f}                      \
 
 
 #define IST8310_BOARD_INSTALL_SPIN_MATRIX   \
-   {1.0f, 0.0f, 0.0f},                    \
-   {0.0f, 1.0f, 0.0f},                     \
-   {0.0f, 0.0f, 1.0f}                     \
+   {0.0f, 1.0f, 0.0f},                    \
+   {0.0f, 0.0f, 1.0f},                     \
+   {1.0f, 0.0f, 0.0f}                      \
 
-		// {0.0f, 1.0f, 0.0f},                     \
+	// {0.0f, 1.0f, 0.0f},                     \
     // {0.0f, 0.0f, 1.0f},                     \
     // {1.0f, 0.0f, 0.0f}                      \
 
@@ -159,12 +167,12 @@ static const fp32 fliter_num[3] = {1.929454039488895f, -0.93178349823448126f, 0.
 
 
 
-
-static fp32 INS_gyro[3] = {0.0f, 0.0f, 0.0f};
-static fp32 INS_accel[3] = {0.0f, 0.0f, 0.0f};
-static fp32 INS_mag[3] = {0.0f, 0.0f, 0.0f};
-static fp32 INS_quat[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-fp32 INS_angle[3] = {0.0f, 0.0f, 0.0f};      //euler angle, unit rad.欧拉角 单位 rad
+//此处在获取地址时会增加一个offset的值，因此数组中的三个数字分别对应了不同的x、y、roll或者yaw、pitch、roll轴的三轴对应单位量
+fp32 INS_gyro[3]  = {0.0f, 0.0f, 0.0f};
+fp32 INS_accel[3] = {0.0f, 0.0f, 0.0f};
+fp32 INS_mag[3]   = {0.0f, 0.0f, 0.0f};
+fp32 INS_quat[4]  = {0.0f, 0.0f, 0.0f, 0.0f};
+fp32 INS_angle[3] = {0.0f, 0.0f, 0.0f};      //获取欧拉角, 0:yaw, 1:pitch, 2:roll 单位 rad
 
 
 
@@ -195,7 +203,7 @@ void INS_task(void const *pvParameters)
     }
 
     BMI088_read(bmi088_real_data.gyro, bmi088_real_data.accel, &bmi088_real_data.temp);
-    //rotate and zero drift 
+    //获取欧拉角, 0:yaw, 1:pitch, 2:roll：或：x，y，roll
     imu_cali_slove(INS_gyro, INS_accel, INS_mag, &bmi088_real_data, &ist8310_real_data);
 
     PID_init(&imu_temp_pid, PID_POSITION, imu_temp_PID, TEMPERATURE_PID_MAX_OUT, TEMPERATURE_PID_MAX_IOUT);

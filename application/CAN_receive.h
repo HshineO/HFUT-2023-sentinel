@@ -41,10 +41,11 @@ typedef enum
     CAN_TRIGGER_MOTOR_ID = 0x207,
     CAN_GIMBAL_ALL_ID = 0x1FF,
 
-    CAN_TRIGER_high_L_ID=0x201,//四个摩擦轮两个拨弹
+    CAN_TRIGER_high_L_ID = 0x201,//四个摩擦轮两个拨弹
     CAN_TRIGER_low_L_ID = 0x202,
-	  CAN_TRIGER_high_R_ID=0x204,
+	CAN_TRIGER_high_R_ID = 0x204,
     CAN_TRIGER_low_R_ID = 0x205,
+	
     CAN_DIAL_L_ID = 0x203,
     CAN_DIAL_R_ID = 0x206,
 

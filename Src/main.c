@@ -161,7 +161,6 @@ int main(void)
     cali_param_init();
     remote_control_init();
     usart1_tx_dma_init();
-	buzzer_off();//哨兵C板蜂鸣器坏了 关掉
 	usb_init();
 	//usb虚拟串口重新枚举
   /* USER CODE END 2 */

@@ -18,7 +18,7 @@ void buzzer_off(void)
 }
 
 
-void Buzz_Callback()
+void Buzz_Callback(void)
 {
 	buzzer_off();
 }

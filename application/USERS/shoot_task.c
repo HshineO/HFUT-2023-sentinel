@@ -34,24 +34,28 @@
 
 #include "ANO_DT.h"
 
-#define shoot_fric1_on(pwm) fric1_on((pwm)) //摩擦轮1pwm宏定义
-#define shoot_fric2_on(pwm) fric2_on((pwm)) //摩擦轮2pwm宏定义
-#define shoot_fric_off()    fric_off()      //关闭两个摩擦轮
+#include "remote_control.h"
+#include "FreeRTOS.h"
 
-#define shoot_laser_on()    laser_on()      //激光开启宏定义
-#define shoot_laser_off()   laser_off()     //激光关闭宏定义
-//微动开关IO
-#define BUTTEN_TRIG_PIN HAL_GPIO_ReadPin(BUTTON_TRIG_GPIO_Port, BUTTON_TRIG_Pin)
+
 
 
 User_Motor_t user_motor;
 
-static fp32 Extra_3508_SetCurrent_high_L = 0,Extra_3508_SetCurrent_low_L = 0, Extra_3508_SetCurrent_high_R = 0,Extra_3508_SetCurrent_low_R = 0, Motor_2006_L_Motor = 0,Motor_2006_R_Motor = 0;
+static fp32 Extra_3508_SetCurrent_high_L = 0,Extra_3508_SetCurrent_low_L = 0, Extra_3508_SetCurrent_high_R = 0,Extra_3508_SetCurrent_low_R = 0, Motor_2006_L_Motor_Set_Current = 0,Motor_2006_R_Motor_Set_Current = 0;
 volatile extern int16_t Yaw_Can_Set_Current, Pitch_Can_Set_Current;
 extern uint16_t reset_count;
 extern ext_robot_hurt_t robot_hurt_t;
 extern gimbal_control_t gimbal_control;
 extern RecievePacket_t recievePacket;
+extern RC_ctrl_t rc_ctrl;
+
+
+static uint16_t Locked_Time_Tick_L= 0;
+static uint16_t Locked_Time_Tick_R= 0;
+extern osTimerId Anti_Locked_L_TimerHandle;
+extern osTimerId Anti_Locked_R_TimerHandle;
+
 
 fp32 angle_degree[3] = {0.0f, 0.0f, 0.0f};
 
@@ -69,11 +73,11 @@ void shoot_task(void const * argument)
 	  {
 		Motor_User_Mode_Set(&user_motor); //状态机设置
 		  
-		Extra_3508_Data_Processing(&user_motor);//额外的3508状态设置
+		Extra_3508_Data_Processing(&user_motor);//摩擦轮3508数据处理
 		  
-		Extra_3508_Speed_PID(&user_motor);//额外的3508PID设置
+		Extra_3508_Speed_PID(&user_motor);//摩擦轮3508PID设置
 		  
-		Motor_2006_Data_Processing(&user_motor); //2006拨弹电机设置
+		Motor_2006_Data_Processing(&user_motor); //2006拨弹电机设置&防堵转
 		  
 		Motor_2006_PID_Set(&user_motor);//拨弹电机PID设置
 
@@ -83,15 +87,15 @@ void shoot_task(void const * argument)
 		Extra_3508_SetCurrent_low_L = user_motor.motor_extra_3508_low_l.given_current;
 		  
 		Extra_3508_SetCurrent_high_R = user_motor.motor_extra_3508_high_r.given_current;
-		Extra_3508_SetCurrent_low_R = user_motor.motor_extra_3508_low_r.given_current;
+		     Extra_3508_SetCurrent_low_R = user_motor.motor_extra_3508_low_r.given_current;
 		  
 		  //设置两个拨弹盘的电流
-		Motor_2006_L_Motor = user_motor.motor_l_2006.given_current;
-		Motor_2006_R_Motor = user_motor.motor_r_2006.given_current;
+		Motor_2006_L_Motor_Set_Current = user_motor.motor_l_2006.given_current;
+		Motor_2006_R_Motor_Set_Current = user_motor.motor_r_2006.given_current;
 
-			//CAN_cmd_chassis_shoot(0,3000,0,0);
-		CAN_CMD_Extra3508( Extra_3508_SetCurrent_high_L, Extra_3508_SetCurrent_low_L,Motor_2006_L_Motor, Extra_3508_SetCurrent_high_R );
-		CAN_cmd_chassis_shoot(Extra_3508_SetCurrent_low_R,Motor_2006_R_Motor,0,0);
+
+		CAN_CMD_Extra3508( Extra_3508_SetCurrent_high_L, Extra_3508_SetCurrent_low_L,Motor_2006_L_Motor_Set_Current, Extra_3508_SetCurrent_high_R );
+		CAN_cmd_chassis_shoot(Extra_3508_SetCurrent_low_R,Motor_2006_R_Motor_Set_Current,0,0);
 
 	  }
 	  //else	// 不好意思您已经壮烈牺牲
@@ -99,8 +103,8 @@ void shoot_task(void const * argument)
 	  //}
 		
 //	  usb_printf("%6d,%6d.", user_motor.motor_extra_3508_l.extra_3508_measure->speed_rpm, user_motor.motor_extra_3508_r.extra_3508_measure->speed_rpm );
-//    ANODT_SendF1(user_motor.motor_extra_3508_high_l.extra_3508_measure->speed_rpm,user_motor.motor_extra_3508_low_l.extra_3508_measure->speed_rpm,
-//				 user_motor.motor_extra_3508_high_r.extra_3508_measure->speed_rpm,user_motor.motor_extra_3508_low_r.extra_3508_measure->speed_rpm);
+//    ANODT_SendF1((user_motor.motor_r_2006.encoder_pos_ecd - user_motor.motor_r_2006.encoder_pos_ecd_last),(user_motor.motor_l_2006.encoder_pos_ecd - user_motor.motor_l_2006.encoder_pos_ecd_last),
+//				 user_motor.motor_r_2006.encoder_pos_ecd, user_motor.motor_l_2006.encoder_pos_ecd);
 	vTaskDelay(2);	
 	}
 
@@ -528,6 +532,8 @@ static void shoot_bullet_control(void)
     }
 }
 
+
+//我们编写的双枪代码咯~
 void Motor_User_Init( User_Motor_t *User_Motor_InitType )
 {
 	const static fp32 extra_3508_speed_pid[3] = { EXTRA_3508_SPEED_KP, EXTRA_3508_SPEED_KI, EXTRA_3508_SPEED_KD };
@@ -593,18 +599,18 @@ void Motor_User_Mode_Set( User_Motor_t *User_Motor_ModeTypedef )
 	
 	if(gimbal_control.gimbal_control_mode == GIMBAL_RC)
 	{
-		if(switch_is_up(User_Motor_ModeTypedef->user_motor_RC->rc.s[1]))// )	
+		if(switch_is_up(User_Motor_ModeTypedef->user_motor_RC->rc.s[1]))	
 		{
-			if( (User_Motor_ModeTypedef->motor_mode_l==MOTOR_USER_STOP_MODE) || (User_Motor_ModeTypedef->motor_mode_l==MOTOR_DONE_MODE) )//点射注释这里
+			if((User_Motor_ModeTypedef->motor_mode_l == MOTOR_USER_STOP_MODE) || (User_Motor_ModeTypedef->motor_mode_l == MOTOR_DONE_MODE) )//点射注释这里
 			{
 				User_Motor_ModeTypedef->motor_mode_l = MOTOR_GET_READY_MODE;
 			}
-			if( (User_Motor_ModeTypedef->motor_mode_r==MOTOR_USER_STOP_MODE) || (User_Motor_ModeTypedef->motor_mode_r==MOTOR_DONE_MODE) )//点射注释这里
+			if( (User_Motor_ModeTypedef->motor_mode_r == MOTOR_USER_STOP_MODE) || (User_Motor_ModeTypedef->motor_mode_r == MOTOR_DONE_MODE) )//点射注释这里
 			{
 				User_Motor_ModeTypedef->motor_mode_r = MOTOR_GET_READY_MODE;
 			}
 		}
-		else if( switch_is_mid(User_Motor_ModeTypedef->user_motor_RC->rc.s[1] ))//
+		else if( switch_is_mid(User_Motor_ModeTypedef->user_motor_RC->rc.s[1] ))
 		{
 			User_Motor_ModeTypedef->motor_mode_l = MOTOR_USER_STOP_MODE;
 			User_Motor_ModeTypedef->motor_mode_r = MOTOR_USER_STOP_MODE;
@@ -616,7 +622,7 @@ void Motor_User_Mode_Set( User_Motor_t *User_Motor_ModeTypedef )
 	}
 	else if(gimbal_control.gimbal_control_mode == GIMBAL_AUTO)
 	{
-		if(recievePacket.suggest_fire == 1)// )	
+		if(recievePacket.suggest_fire == 1)
 		{
 			if( (User_Motor_ModeTypedef->motor_mode_l==MOTOR_USER_STOP_MODE) || (User_Motor_ModeTypedef->motor_mode_l==MOTOR_DONE_MODE) )//点射注释这里
 			{
@@ -627,7 +633,7 @@ void Motor_User_Mode_Set( User_Motor_t *User_Motor_ModeTypedef )
 				User_Motor_ModeTypedef->motor_mode_r = MOTOR_GET_READY_MODE;
 			}
 		}
-		else if(recievePacket.suggest_fire == 0)//
+		else if(recievePacket.suggest_fire == 0)
 		{
 			User_Motor_ModeTypedef->motor_mode_l = MOTOR_USER_STOP_MODE;
 			User_Motor_ModeTypedef->motor_mode_r = MOTOR_USER_STOP_MODE;
@@ -637,84 +643,11 @@ void Motor_User_Mode_Set( User_Motor_t *User_Motor_ModeTypedef )
 			shoot_count = 0;
 		}
 	}
-	
-
-	// 遥控设置电机模式
-//	if( switch_is_up(User_Motor_ModeTypedef->user_motor_RC->rc.s[1]) )	
-//	{
-//		shoot_count++;
-//		
-//		if( shoot_count == 10 )		User_Motor_ModeTypedef->motor_mode = MOTOR_GET_READY_MODE;	// 发射弹丸一次
-////		if( shoot_count == 8000 )	shoot_count = 8000, User_Motor_ModeTypedef->motor_mode = CLEAR_BULLET_PRE_MODE;	// 准备清空所有子弹
-//		if( shoot_count > 8020 )	shoot_count = 8020;
-//	}
-//	else
-//	{
-//		shoot_count = 0;
-//	}
-//	if( switch_is_mid(User_Motor_ModeTypedef->user_motor_RC->rc.s[1]) )
-//	{
-//		User_Motor_ModeTypedef->motor_mode = MOTOR_USER_STOP_MODE;
-//	}
-	// else if( switch_is_up(User_Motor_ModeTypedef->user_motor_RC->rc.s[1]) )	// 使用键盘控制模式
-	// {
-	// 	// 键盘设置电机模式
-	// 	if( (User_Motor_ModeTypedef->user_motor_RC->key.v & KEY_PRESSED_OFFSET_SHIFT_CTRL) == KEY_PRESSED_OFFSET_SHIFT_CTRL )	// shift和ctrl都按下
-	// 	{
-	// 		if( User_Motor_ModeTypedef->user_motor_RC->key.v & CONTROL_GUARD_TO_FLEE )	// 控制哨兵逃跑
-	// 		{
-	// 		}
-	// 		else if( User_Motor_ModeTypedef->user_motor_RC->key.v & CONTROL_GUARD_TO_ATTACK )		// 控制哨兵进攻
-	// 		{
-	// 		}
-	// 	}
-	// 	else if( User_Motor_ModeTypedef->user_motor_RC->key.v & KEY_PRESSED_OFFSET_SHIFT )	// 只有shift按下
-	// 	{
-			
-	// 	}
-	// 	else if( User_Motor_ModeTypedef->user_motor_RC->key.v & KEY_PRESSED_OFFSET_CTRL )	// 只有ctrl都按下
-	// 	{
-			
-	// 	}
-	// 	// 鼠标检测
-	// 	if( User_Motor_ModeTypedef->user_motor_RC->mouse.press_l )
-	// 	{
-	// 		if( (User_Motor_ModeTypedef->motor_mode==MOTOR_USER_STOP_MODE) || (User_Motor_ModeTypedef->motor_mode==MOTOR_DONE_MODE) )
-	// 		{
-	// 			User_Motor_ModeTypedef->motor_mode = MOTOR_GET_READY_MODE;
-	// 		}
-	// 	}
-	// 	if( User_Motor_ModeTypedef->user_motor_RC->mouse.press_r )
-	// 	{
-	// 	}
-		
-	// 	if( reset_count >= 5000 )
-	// 	{
-	// 	  if( User_Motor_ModeTypedef->user_motor_RC->key.v & KEY_PRESSED_OFFSET_CTRL )	// ctrl按下，强行复位按钮
-	// 	  {
-	// 		  if( User_Motor_ModeTypedef->user_motor_RC->key.v & KEY_PRESSED_OFFSET_SHIFT )	// shift按下，强行复位按钮
-	// 		  {
-	// 			  if( User_Motor_ModeTypedef->user_motor_RC->key.v & KEY_PRESSED_OFFSET_A )	// A按下，强行复位按钮
-	// 			  {
-	// 				  if( User_Motor_ModeTypedef->user_motor_RC->key.v & KEY_PRESSED_OFFSET_D )	// D按下，强行复位按钮
-	// 				  {
-	// 					  CAR_FORCE_RESET();
-	// 				  }
-	// 			  }
-	// 		  }
-	// 	  }
-	// 	}
-	// }
-	// if ( switch_is_down(User_Motor_ModeTypedef->user_motor_RC->rc.s[0]) )	// 所有电机停转，除拨弹轮
-	// {
-	// 	User_Motor_ModeTypedef->motor_mode = MOTOR_USER_STOP_MODE;
-	// }
 }
 void Extra_3508_Data_Processing( User_Motor_t *User_Motor_DataType )
 {
 	static uint16_t shoot15_speed = 0, shoot18_speed = 0, shoot30_speed = 0;
-	//fp32 speed_limit = robot_state.shooter_id1_17mm_speed_limit;
-	
+
 	// 两个摩擦轮3508电机数据处理
 	User_Motor_DataType->motor_extra_3508_high_l.speed = User_Motor_DataType->motor_extra_3508_high_l.extra_3508_measure->speed_rpm;
 	User_Motor_DataType->motor_extra_3508_low_l.speed = User_Motor_DataType->motor_extra_3508_low_l.extra_3508_measure->speed_rpm;
@@ -722,88 +655,28 @@ void Extra_3508_Data_Processing( User_Motor_t *User_Motor_DataType )
 	User_Motor_DataType->motor_extra_3508_low_r.speed = User_Motor_DataType->motor_extra_3508_low_r.extra_3508_measure->speed_rpm;
 	
 	
-	
-//	if( User_Motor_DataType->motor_mode == MOTOR_USER_STOP_MODE )
-//	{
-//		User_Motor_DataType->motor_extra_3508_l.speed_set = 0;
-//		User_Motor_DataType->motor_extra_3508_r.speed_set = 0;
-//	}
-//	else if( User_Motor_DataType->motor_mode == MOTOR_SHOOT_MODE )	// 发射子弹时
-	{
-		// 根据裁判系统设置射速
-//		if( robot_state.shooter_id1_17mm_speed_limit == 15 )
-//		{
-//			if( shoot_data_t.bullet_speed > speed_limit )
-//			{
-//				shoot15_speed = 200*(shoot_data_t.bullet_speed - speed_limit);
-//			}
-			// 如果最大射速是15m/s的话
-//			User_Motor_DataType->motor_extra_3508_l.speed_set = EXTRA_3508_ROTATE_SPEED_15 - shoot15_speed;
-//			User_Motor_DataType->motor_extra_3508_r.speed_set = EXTRA_3508_ROTATE_SPEED_15 - shoot15_speed;
-//		}
-//		else if( robot_state.shooter_id1_17mm_speed_limit == 18 )
-//		{
-//			if( shoot_data_t.bullet_speed > speed_limit )
-//			{
-//				shoot18_speed = 200*(shoot_data_t.bullet_speed - speed_limit);
-//			}
-//			// 如果最大射速是18m/s的话
-//			User_Motor_DataType->motor_extra_3508_l.speed_set = EXTRA_3508_ROTATE_SPEED_18 - shoot18_speed;
-//			User_Motor_DataType->motor_extra_3508_r.speed_set = EXTRA_3508_ROTATE_SPEED_18 - shoot18_speed;
-//		}
-//		else if( robot_state.shooter_id1_17mm_speed_limit == 30 )
-//		{
-//			if( shoot_data_t.bullet_speed > speed_limit )
-//			{
-//				shoot30_speed = 200*(shoot_data_t.bullet_speed - speed_limit);
-//			}
-//			// 如果最大射速是30m/s的话
-//			User_Motor_DataType->motor_extra_3508_l.speed_set = EXTRA_3508_ROTATE_SPEED_30 - shoot30_speed;
-//			User_Motor_DataType->motor_extra_3508_r.speed_set = EXTRA_3508_ROTATE_SPEED_30 - shoot30_speed;
-//		}
-//		else
-//		{
-            User_Motor_DataType->motor_extra_3508_high_l.speed_set = EXTRA_3508_ROTATE_SPEED_30;
-			User_Motor_DataType->motor_extra_3508_low_l.speed_set = EXTRA_3508_ROTATE_SPEED_30;
-            User_Motor_DataType->motor_extra_3508_high_r.speed_set = EXTRA_3508_ROTATE_SPEED_30;
-			User_Motor_DataType->motor_extra_3508_low_r.speed_set = EXTRA_3508_ROTATE_SPEED_30;
-//			// 如果都不是的话，那就速度设置为0来报错
-//			User_Motor_DataType->motor_extra_3508_l.speed_set = 0;
-//			User_Motor_DataType->motor_extra_3508_r.speed_set = 0;
-		//}
-		
-		#if EXTRA_3508_L_ROTATE_DIR//电机的旋转方向
-			//User_Motor_DataType->motor_extra_3508_l.speed_set = User_Motor_DataType->motor_extra_3508_l.speed_set;
-		#else
-			User_Motor_DataType->motor_extra_3508_high_l.speed_set = User_Motor_DataType->motor_extra_3508_high_l.speed_set;
-			User_Motor_DataType->motor_extra_3508_high_r.speed_set = -User_Motor_DataType->motor_extra_3508_high_r.speed_set;
-		#endif
-		#if EXTRA_3508_R_ROTATE_DIR
-			//User_Motor_DataType->motor_extra_3508_r.speed_set = User_Motor_DataType->motor_extra_3508_r.speed_set;
-		#else
-			User_Motor_DataType->motor_extra_3508_low_l.speed_set = -User_Motor_DataType->motor_extra_3508_low_l.speed_set;
-			User_Motor_DataType->motor_extra_3508_low_r.speed_set = User_Motor_DataType->motor_extra_3508_low_r.speed_set;
-		#endif
-	}
+	User_Motor_DataType->motor_extra_3508_high_l.speed_set = EXTRA_3508_ROTATE_SPEED_30;
+	User_Motor_DataType->motor_extra_3508_low_l.speed_set  = EXTRA_3508_ROTATE_SPEED_30;
+	User_Motor_DataType->motor_extra_3508_high_r.speed_set = EXTRA_3508_ROTATE_SPEED_30;
+	User_Motor_DataType->motor_extra_3508_low_r.speed_set  = EXTRA_3508_ROTATE_SPEED_30;
+
+	User_Motor_DataType->motor_extra_3508_high_l.speed_set =  User_Motor_DataType->motor_extra_3508_high_l.speed_set;
+	User_Motor_DataType->motor_extra_3508_high_r.speed_set = -User_Motor_DataType->motor_extra_3508_high_r.speed_set;
+
+	User_Motor_DataType->motor_extra_3508_low_l.speed_set  = -User_Motor_DataType->motor_extra_3508_low_l.speed_set;
+	User_Motor_DataType->motor_extra_3508_low_r.speed_set  =  User_Motor_DataType->motor_extra_3508_low_r.speed_set;
+
 }
 
 void Motor_2006_Data_Processing( User_Motor_t *User_Motor_DataType )
 {
 	if( User_Motor_DataType->motor_mode_l == MOTOR_GET_READY_MODE || User_Motor_DataType->motor_mode_l == CLEAR_BULLET_PRE_MODE )
 	{
-		#if MOTOR_2006_ROTATE_DIR
-			User_Motor_DataType->motor_2006.encoder_pos_all_set += MOTOR_2006_ENCODER_ONE_SHOOT;
-			if( User_Motor_DataType->motor_2006.encoder_pos_all_set >= MOTOR_2006_ENCODER_A_ROUND )
-			{
-				User_Motor_DataType->motor_2006.encoder_pos_all_set -= MOTOR_2006_ENCODER_A_ROUND;
-			}
-		#else
-			User_Motor_DataType->motor_l_2006.encoder_pos_all_set -= MOTOR_2006_ENCODER_ONE_SHOOT;
-			if( User_Motor_DataType->motor_l_2006.encoder_pos_all_set < 0 )
-			{
-				User_Motor_DataType->motor_l_2006.encoder_pos_all_set += MOTOR_2006_ENCODER_A_ROUND;
-			}
-		#endif
+		User_Motor_DataType->motor_l_2006.encoder_pos_all_set -= MOTOR_2006_ENCODER_ONE_SHOOT;
+		if( User_Motor_DataType->motor_l_2006.encoder_pos_all_set < 0 )
+		{
+			User_Motor_DataType->motor_l_2006.encoder_pos_all_set += MOTOR_2006_ENCODER_A_ROUND;
+		}
 
 		if( User_Motor_DataType->motor_mode_l == MOTOR_GET_READY_MODE )		User_Motor_DataType->motor_mode_l = MOTOR_SHOOT_MODE;
 		else if( User_Motor_DataType->motor_mode_l == CLEAR_BULLET_PRE_MODE )	User_Motor_DataType->motor_mode_l = CLEAR_BULLET_STA_MODE;
@@ -811,33 +684,102 @@ void Motor_2006_Data_Processing( User_Motor_t *User_Motor_DataType )
 
 	if( User_Motor_DataType->motor_mode_r == MOTOR_GET_READY_MODE || User_Motor_DataType->motor_mode_r == CLEAR_BULLET_PRE_MODE )
 	{
-		#if MOTOR_2006_ROTATE_DIR
-			User_Motor_DataType->motor_2006.encoder_pos_all_set += MOTOR_2006_ENCODER_ONE_SHOOT;
-			if( User_Motor_DataType->motor_2006.encoder_pos_all_set >= MOTOR_2006_ENCODER_A_ROUND )
-			{
-				User_Motor_DataType->motor_2006.encoder_pos_all_set -= MOTOR_2006_ENCODER_A_ROUND;
-			}
-		#else
-			User_Motor_DataType->motor_r_2006.encoder_pos_all_set -= MOTOR_2006_ENCODER_ONE_SHOOT;
-			if( User_Motor_DataType->motor_r_2006.encoder_pos_all_set < 0 )
-			{
-				User_Motor_DataType->motor_r_2006.encoder_pos_all_set += MOTOR_2006_ENCODER_A_ROUND;
-			}
-		#endif
-		
+		User_Motor_DataType->motor_r_2006.encoder_pos_all_set -= MOTOR_2006_ENCODER_ONE_SHOOT;
+		if( User_Motor_DataType->motor_r_2006.encoder_pos_all_set < 0 )
+		{
+			User_Motor_DataType->motor_r_2006.encoder_pos_all_set += MOTOR_2006_ENCODER_A_ROUND;
+		}
+
 		if( User_Motor_DataType->motor_mode_r == MOTOR_GET_READY_MODE )		User_Motor_DataType->motor_mode_r = MOTOR_SHOOT_MODE;
 		else if( User_Motor_DataType->motor_mode_r == CLEAR_BULLET_PRE_MODE )	User_Motor_DataType->motor_mode_r = CLEAR_BULLET_STA_MODE;
+		
 	}
-	
+	//拨弹盘2006电机状态更新
 	User_Motor_DataType->motor_l_2006.encoder_pos_ecd = User_Motor_DataType->motor_l_2006.motor_2006_measure->ecd;
 	User_Motor_DataType->motor_r_2006.encoder_pos_ecd = User_Motor_DataType->motor_r_2006.motor_2006_measure->ecd;
+	#if 0
 	// 堵转检测  先右后左，分开判断
 	if( User_Motor_DataType->motor_r_2006.speed_set != 0 )		// 当电机旋转的时候才开始检测堵转
 	{
 		if( ((User_Motor_DataType->motor_r_2006.encoder_pos_ecd - User_Motor_DataType->motor_r_2006.encoder_pos_ecd_last) < MOTOR_2006_LOCKED_ROTOR_ERROR) && 
 			((User_Motor_DataType->motor_r_2006.encoder_pos_ecd - User_Motor_DataType->motor_r_2006.encoder_pos_ecd_last) > -MOTOR_2006_LOCKED_ROTOR_ERROR) )
 		{
+			xTimerStart( Anti_Locked_R_TimerHandle , Block_Time_Tick );
+		}
+		if( Locked_Time_Tick_R >= MOTOR_2006_LOCKED_ROTOR_SHORT_Tick )
+		{
+			// 确认为堵转了
+			User_Motor_DataType->motor_mode_r = MOTOR_LOCKED_ROTOR;
+		}
+		
+			else if( Locked_Time_Tick_R >= MOTOR_2006_LOCKED_ROTOR_LONG_Tick )
+			{ 
+				// 长时间堵转，没救了，断电吧，但程序没写死，还是可以继续动
+				User_Motor_DataType->motor_mode_r = MOTOR_USER_STOP_MODE;
+			}
+			
+		if( User_Motor_DataType->motor_mode_r == MOTOR_LOCKED_ROTOR )
+		{
+			User_Motor_DataType->reversal_time_r++;
+		}
+		
+		
+		if( User_Motor_DataType->motor_mode_r == MOTOR_LOCKED_ROTOR )
+		{
+			if( User_Motor_DataType->reversal_time_r > MOTOR_2006_LOCKED_ROTOR_REVERSAL )
+			{
+				// 认为反转时间达到，重新开始正转
+				User_Motor_DataType->motor_mode_r = MOTOR_SHOOT_MODE;
+				User_Motor_DataType->reversal_time_r = 0;
+				xTimerStop( Anti_Locked_R_TimerHandle );
+			}
+		}
+	}
+	
+	if( User_Motor_DataType->motor_l_2006.speed_set != 0 )		// 当电机旋转的时候才开始检测堵转
+	{
+		if( ((User_Motor_DataType->motor_l_2006.encoder_pos_ecd - User_Motor_DataType->motor_l_2006.encoder_pos_ecd_last) < MOTOR_2006_LOCKED_ROTOR_ERROR) && 
+			((User_Motor_DataType->motor_l_2006.encoder_pos_ecd - User_Motor_DataType->motor_l_2006.encoder_pos_ecd_last) > -MOTOR_2006_LOCKED_ROTOR_ERROR) )
+		{
+			xTimerStart( Anti_Locked_L_TimerHandle , Block_Time_Tick );
+		}
+		
+		if( User_Motor_DataType->motor_mode_l == MOTOR_LOCKED_ROTOR )
+		{
+			User_Motor_DataType->reversal_time_l++;
+		}
+		
+		if( User_Motor_DataType->locked_rotor_time_l >= MOTOR_2006_LOCKED_ROTOR_LONG_Tick  )
+		{
+			// 长时间堵转，没救了，断电吧，但程序没写死，还是可以继续动
+			User_Motor_DataType->motor_mode_l = MOTOR_USER_STOP_MODE;
+			
+		}
+		else if( User_Motor_DataType->locked_rotor_time_l >=  MOTOR_2006_LOCKED_ROTOR_SHORT )
+		{
+			// 确认为堵转了
+			User_Motor_DataType->motor_mode_l = MOTOR_LOCKED_ROTOR;
+		}
+		
+		if( User_Motor_DataType->motor_mode_l == MOTOR_LOCKED_ROTOR )
+		{
+			if( User_Motor_DataType->reversal_time_l > MOTOR_2006_LOCKED_ROTOR_REVERSAL )
+			{
+				// 认为反转时间达到，重新开始正转
+				User_Motor_DataType->motor_mode_l = MOTOR_SHOOT_MODE;
+				User_Motor_DataType->reversal_time_l = 0;
+			}
+		}
+	}	
+	#elseif
+	
+	if( User_Motor_DataType->motor_r_2006.speed_set != 0 )		// 当电机旋转的时候才开始检测堵转
+	{
+		if( ((User_Motor_DataType->motor_r_2006.encoder_pos_ecd - User_Motor_DataType->motor_r_2006.encoder_pos_ecd_last) < MOTOR_2006_LOCKED_ROTOR_ERROR) && 
+			((User_Motor_DataType->motor_r_2006.encoder_pos_ecd - User_Motor_DataType->motor_r_2006.encoder_pos_ecd_last) > -MOTOR_2006_LOCKED_ROTOR_ERROR) )
+		{
 			User_Motor_DataType->locked_rotor_time_r++;	// 认为是堵转了，开始计数
+			//xTimerStart( Anti_Locked_R_TimerHandle , Block_Time_Tick );
 		}
 		else
 		{
@@ -882,6 +824,7 @@ void Motor_2006_Data_Processing( User_Motor_t *User_Motor_DataType )
 			((User_Motor_DataType->motor_l_2006.encoder_pos_ecd - User_Motor_DataType->motor_l_2006.encoder_pos_ecd_last) > -MOTOR_2006_LOCKED_ROTOR_ERROR) )
 		{
 			User_Motor_DataType->locked_rotor_time_l++;	// 认为是堵转了，开始计数
+			//xTimerStart( Anti_Locked_L_TimerHandle , Block_Time_Tick );
 		}
 		else
 		{
@@ -919,7 +862,7 @@ void Motor_2006_Data_Processing( User_Motor_t *User_Motor_DataType )
 			}
 		}
 	}
-	
+	#endif
 	// 拨弹轮2006电机位置计算  先右后左，分开判断
 	if( User_Motor_DataType->motor_mode_l == MOTOR_SHOOT_MODE || User_Motor_DataType->motor_mode_l == CLEAR_BULLET_STA_MODE )
 	{
@@ -981,10 +924,12 @@ void Motor_2006_Data_Processing( User_Motor_t *User_Motor_DataType )
 		if( User_Motor_DataType->motor_r_2006.encoder_pos_ecd - User_Motor_DataType->motor_r_2006.encoder_pos_ecd_last >= MOTOR_USER_HALF_ENCODER )
 		{
 			User_Motor_DataType->motor_r_2006.encoder_pos_count--;
+			//osDelay(5);
 		}
 		else if( User_Motor_DataType->motor_r_2006.encoder_pos_ecd - User_Motor_DataType->motor_r_2006.encoder_pos_ecd_last <= -MOTOR_USER_HALF_ENCODER )
 		{
 			User_Motor_DataType->motor_r_2006.encoder_pos_count++;
+			//osDelay(5);
 		}
 		
 		User_Motor_DataType->motor_r_2006.encoder_pos_ecd_last = User_Motor_DataType->motor_r_2006.encoder_pos_ecd;
@@ -1028,62 +973,32 @@ void Motor_2006_Data_Processing( User_Motor_t *User_Motor_DataType )
 	// 拨弹轮2006电机速度读取
 	User_Motor_DataType->motor_l_2006.speed = User_Motor_DataType->motor_l_2006.motor_2006_measure->speed_rpm;
 	User_Motor_DataType->motor_r_2006.speed = User_Motor_DataType->motor_r_2006.motor_2006_measure->speed_rpm;
+	
 	// 拨弹轮2006电机速度设置
 	if( User_Motor_DataType->motor_mode_l == MOTOR_USER_STOP_MODE )
 	{
 		User_Motor_DataType->motor_l_2006.speed_set = 0;
+		User_Motor_DataType->motor_r_2006.speed_set = 0;
 	}
 	else if( (User_Motor_DataType->motor_mode_l == MOTOR_SHOOT_MODE) || (User_Motor_DataType->motor_mode_l == MOTOR_GET_READY_MODE) )
 	{
-		#if MOTOR_2006_ROTATE_DIR
-			User_Motor_DataType->motor_2006.speed_set = MOTOR_2006_QUICK_ROTATE_SPEED;
-		#else
-			User_Motor_DataType->motor_l_2006.speed_set = MOTOR_2006_QUICK_ROTATE_SPEED;
-		#endif
-
+		User_Motor_DataType->motor_l_2006.speed_set = MOTER_2006_8_BULLETS_PERSEC;
+		User_Motor_DataType->motor_r_2006.speed_set = -MOTER_2006_8_BULLETS_PERSEC;
 	}
 	else if( User_Motor_DataType->motor_mode_l == MOTOR_LOCKED_ROTOR )
 	{
-		// 堵转，开始反转
-		#if MOTOR_2006_ROTATE_DIR
-			User_Motor_DataType->motor_2006.speed_set = -MOTOR_2006_QUICK_ROTATE_SPEED;
-		#else
-			User_Motor_DataType->motor_l_2006.speed_set = -MOTOR_2006_QUICK_ROTATE_SPEED;
-		#endif
+		User_Motor_DataType->motor_l_2006.speed_set = -MOTER_2006_8_BULLETS_PERSEC;
+		User_Motor_DataType->motor_r_2006.speed_set = MOTER_2006_8_BULLETS_PERSEC;	
 	}
+	#if 0 //哨兵不需要点射
 	else if( User_Motor_DataType->motor_mode_l == MOTOR_DONE_MODE )
 	{
 		User_Motor_DataType->motor_l_2006.speed_set = 0;
-	}
-
-	
-	// 拨弹轮2006电机速度设置
-	if( User_Motor_DataType->motor_mode_r == MOTOR_USER_STOP_MODE )
-	{
 		User_Motor_DataType->motor_r_2006.speed_set = 0;
 	}
-	else if( (User_Motor_DataType->motor_mode_r == MOTOR_SHOOT_MODE) || (User_Motor_DataType->motor_mode_r == MOTOR_GET_READY_MODE) )
-	{
-		#if MOTOR_2006_ROTATE_DIR
-			User_Motor_DataType->motor_2006.speed_set = MOTOR_2006_QUICK_ROTATE_SPEED;
-		#else
-			User_Motor_DataType->motor_r_2006.speed_set = -MOTOR_2006_QUICK_ROTATE_SPEED;
-		#endif
-	}
-	else if( User_Motor_DataType->motor_mode_r == MOTOR_LOCKED_ROTOR )
-	{
-		// 堵转，开始反转
-		#if MOTOR_2006_ROTATE_DIR
-			User_Motor_DataType->motor_2006.speed_set = -MOTOR_2006_QUICK_ROTATE_SPEED;
-		#else
-			User_Motor_DataType->motor_r_2006.speed_set = MOTOR_2006_QUICK_ROTATE_SPEED;
-		#endif
-	}
-	else if( User_Motor_DataType->motor_mode_r == MOTOR_DONE_MODE )
-	{
-		User_Motor_DataType->motor_r_2006.speed_set = 0;
-	}
+	#endif
 }
+	
 
 void Extra_3508_Speed_PID( User_Motor_t *User_Motor_PIDType )
 {
@@ -1110,27 +1025,16 @@ void Motor_2006_PID_Set( User_Motor_t *User_Motor_PIDType )
 	User_Motor_PIDType->motor_r_2006.given_current = (int16_t)User_Motor_PIDType->motor_r_2006.motor_speed_pid.out;
 }
 
-//void ExBoard_Angle_Init_Mode( CAN_HandleTypeDef *hcan, uint16_t addr )
-//{
-//	uint8_t buf[8] = { 0 };
-//	buf[7] = MPU6050_ANGLE_INIT_MODE;
-//	CAN_SEND_MESSAGE( hcan, buf, addr );
-//}
-//这个是弹仓门的舵机
-//void ExBoard_Servo_Control_Mode( CAN_HandleTypeDef *hcan, uint16_t addr, uint16_t angle1, uint16_t angle2 )
-//{
-//	uint8_t buf[8] = { 0 };
-//	buf[7] = SERVO_ANGLE_SET_MODE;
-//	buf[0] = angle1 >> 8;
-//	buf[1] = angle1;
-//	buf[2] = angle2 >> 8;
-//	buf[3] = angle2;
-//	CAN_SEND_MESSAGE( hcan, buf, addr );
-//}
+void Anti_locked_roter( User_Motor_t *User_Motor_DataType )
+{
+}	
 
-// 强制复位函数
-//void CAR_FORCE_RESET( void )
-//{
-//	__set_FAULTMASK(1);//关闭所有中断
-//	NVIC_SystemReset();//复位函数
-//}
+void Anti_Locked_L_Callback( void const * argument )
+{
+	Locked_Time_Tick_L++;
+}
+
+void Anti_Locked_R_Callback( void const * argument )
+{
+	Locked_Time_Tick_R++;
+}

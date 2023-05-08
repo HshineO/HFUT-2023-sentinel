@@ -300,13 +300,13 @@ static void chassis_set_mode(chassis_move_t *chassis_move_mode)
     {
       if (chassis_move_mode->chassis_RC->rc.ch[4] >= 630){
 		chassis_move_mode->chassis_control_mode = CHASSIS_AUTO;
-//		buzzer_on(1000,700);
-//		xTimerStart(Buzz_Timer,1000);
+		buzzer_on(5,20000);
 	  }
       if (chassis_move_mode->chassis_RC->rc.ch[4] <= -630){
 		chassis_move_mode->chassis_control_mode = CHASSIS_RC;
-		timecnt = 0;
+		buzzer_on(5,20000);
 	  }
+		timecnt = 0; 
     }
   }
     //in file "chassis_behaviour.c"
@@ -366,7 +366,7 @@ static void chassis_mode_change_control_transit(chassis_move_t *chassis_move_tra
   * @brief          底盘测量数据更新，包括电机速度，欧拉角度，机器人速度
   * @param[out]     chassis_move_update:"chassis_move"变量指针.
   * @retval         none
-  */
+  */ 
 static void chassis_feedback_update(chassis_move_t *chassis_move_update)
 {
     if (chassis_move_update == NULL)

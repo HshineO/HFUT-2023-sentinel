@@ -98,32 +98,32 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
           }
       }
     }
-    else if (hcan==&hcan2)
-    {
-      switch (rx_header.StdId)
-      {
-          //case CAN_PIT_MOTOR_ID:
-          //case CAN_TRIGGER_MOTOR_ID:
-          {
-              static uint8_t i = 0;
-              //get motor id
-              i = rx_header.StdId - CAN_3508_M1_ID;
-              get_motor_measure(&motor_chassis[i], rx_data);
-              detect_hook(CHASSIS_MOTOR1_TOE + i);
-              break;
-          }
+	else if (hcan==&hcan2)
+	{
+		switch (rx_header.StdId)
+		{
+		//case CAN_PIT_MOTOR_ID:
+		//case CAN_TRIGGER_MOTOR_ID:
+			{
+				static uint8_t i = 0;
+				//get motor id
+				i = rx_header.StdId - CAN_3508_M1_ID;
+				get_motor_measure(&motor_chassis[i], rx_data);
+				detect_hook(CHASSIS_MOTOR1_TOE + i);
+				break;
+			}
           
-          case CAN_TRIGER_high_L_ID: get_motor_measure(&shoot_motor[0],rx_data);break;//Ä¦²ÁÂÖ
-          case CAN_TRIGER_low_L_ID: get_motor_measure(&shoot_motor[1],rx_data);break;
-					case CAN_TRIGER_high_R_ID: get_motor_measure(&shoot_motor[3],rx_data);break;
-          case CAN_TRIGER_low_R_ID: get_motor_measure(&shoot_motor[4],rx_data);break;
-          case CAN_DIAL_L_ID: get_motor_measure(&shoot_motor[2],rx_data);break;//²¦µ¯
-          case CAN_DIAL_R_ID: get_motor_measure(&shoot_motor[5],rx_data);break;
+			case CAN_TRIGER_high_L_ID: get_motor_measure(&shoot_motor[0],rx_data);break;//Ä¦²ÁÂÖ
+			case CAN_TRIGER_low_L_ID: get_motor_measure(&shoot_motor[1],rx_data);break;
+			case CAN_TRIGER_high_R_ID: get_motor_measure(&shoot_motor[3],rx_data);break;
+			case CAN_TRIGER_low_R_ID: get_motor_measure(&shoot_motor[4],rx_data);break;
+			case CAN_DIAL_L_ID: get_motor_measure(&shoot_motor[2],rx_data);break;//²¦µ¯
+			case CAN_DIAL_R_ID: get_motor_measure(&shoot_motor[5],rx_data);break;
 
-          default:
-          {
+			default:
+			{
               break;
-          }
+			}
       }
     }
     
